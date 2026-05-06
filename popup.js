@@ -166,12 +166,25 @@ function formatCountdown(dueMs, nowMs) {
   const hours = Math.floor((abs % DAY_MS) / HOUR_MS);
   const minutes = Math.floor((abs % HOUR_MS) / (60 * 1000));
 
-  let text;
-  if (days > 0) text = `${days}d ${hours}h`;
-  else if (hours > 0) text = `${hours}h ${minutes}m`;
-  else text = `${minutes}m`;
+  // Build the time remaining text (e.g., "2d 4h" or "5h 30m")
+  let timeText;
+  if (days > 0) timeText = `${days}d ${hours}h`;
+  else if (hours > 0) timeText = `${hours}h ${minutes}m`;
+  else timeText = `${minutes}m`;
 
-  return diff < 0 ? `Overdue by ${text}` : `Due in ${text}`;
+  // If it has already passed
+  if (diff < 0) {
+    return `Overdue by ${timeText}`;
+  }
+
+  // If the deadline is 24+ hours away (This Week / Later), include the day of the week
+  if (days > 0) {
+    const dayName = new Date(dueMs).toLocaleDateString(undefined, { weekday: 'long' });
+    return `Due ${dayName} (in ${timeText})`;
+  }
+
+  // If the deadline is under 24 hours away (Today), just show the countdown
+  return `Due in ${timeText}`;
 }
 
 function formatDueDate(iso) {
