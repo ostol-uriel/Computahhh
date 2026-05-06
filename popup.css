@@ -629,3 +629,140 @@ main {
 reminder-menu button:hover {
   background-color: #f5f5f5 !important;
 }
+
+/* Classes Tab Styles */
+.classes-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.class-input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.class-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
+.classes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.class-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+  transition: all 0.15s ease;
+}
+
+.class-item:hover {
+  box-shadow: 0 2px 8px rgba(59, 91, 219, 0.12);
+}
+
+.class-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.class-name {
+  font-weight: 600;
+  font-size: 15px;
+  margin: 0;
+  color: var(--text);
+}
+
+.delete-class-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-class-btn:hover {
+  color: #e03131;
+}
+
+.class-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 8px 0;
+}
+
+.class-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.class-link-btn,
+.edit-class-btn,
+.remind-class-btn {
+  flex: 1;
+  min-width: 70px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.class-link-btn {
+  background: #0078d4;
+  color: #fff;
+  border-color: #0078d4;
+}
+
+.class-link-btn:hover {
+  background: #005a9e;
+  border-color: #005a9e;
+}
+
+.edit-class-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.remind-class-btn:hover {
+  border-color: #f08c00;
+  color: #f08c00;
+}
+
+.no-link {
+  color: var(--text-muted);
+  font-size: 12px;
+}

@@ -2,7 +2,6 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const CHECK_ALARM = "deadline-check";
 const CHECK_PERIOD_MIN = 30;
-const prereqWarning = item.isLocked ? `\n\n⚠️ LCKED: You must complete prerequisites (formatives/readings) first!` : '';
 const NOTIFICATION_TIERS = [
   { key: "3d", windowMs: 3 * DAY_MS, label: "3 days" },
   { key: "1d", windowMs: DAY_MS, label: "1 day" },
@@ -88,14 +87,3 @@ async function checkDeadlines() {
 
   await chrome.storage.local.set({ notified: sent, notifiedMap });
 }
-chrome.notifications.create(notificationId, {
-  type: 'basic',
-  iconUrl: 'icons/icon128.png', 
-  title: tier.urgent ? '🚨 URGENT DEADLINE' : '📅 Deadline Reminder',
-  
-  // NEW: Append the prerequisite warning to the notification text
-  message: `"${item.title}" in ${item.courseName} is due in less than ${tier.label}!${prereqWarning}`,
-  
-  priority: tier.urgent ? 2 : 0,
-  requireInteraction: tier.urgent
-});

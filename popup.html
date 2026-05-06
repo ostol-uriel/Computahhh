@@ -48,6 +48,7 @@
   <nav class="tabs-nav">
     <button id="tab1Btn" class="tab-btn active" data-tab="1">📋 Assignments</button>
     <button id="tab2Btn" class="tab-btn" data-tab="2">🔔 Notifications</button>
+    <button id="tab3Btn" class="tab-btn" data-tab="3">📚 Classes</button>
   </nav>
 
   <!-- Page 1: Assignments -->
@@ -90,6 +91,26 @@
     <div id="announcementsList" class="announcements-list"></div>
     <p id="emptyAnnouncements" class="empty-state hidden">
       No announcements yet.
+    </p>
+  </main>
+
+  <!-- Page 3: Classes & Meeting Links -->
+  <main id="page3" class="tab-page hidden">
+    <div class="classes-input-container">
+      <input type="text" id="classInput" class="class-input" placeholder="Subject name (e.g., Math 101)">
+      <input type="url" id="meetingLink" class="class-input" placeholder="Meeting link (e.g., Google Meet URL)">
+      <select id="meetingType" class="class-input">
+        <option value="google-meet">Google Meet</option>
+        <option value="zoom">Zoom</option>
+        <option value="teams">Microsoft Teams</option>
+        <option value="other">Other Link</option>
+      </select>
+      <input type="time" id="classTime" class="class-input">
+      <button id="addClass" class="primary full-width">Add Class</button>
+    </div>
+    <div id="classList" class="classes-list"></div>
+    <p id="emptyClasses" class="empty-state hidden">
+      No classes added yet. Add your first class above.
     </p>
   </main>
 

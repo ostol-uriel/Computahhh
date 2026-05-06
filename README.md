@@ -11,9 +11,13 @@ A powerful Chrome extension that transforms Canvas LMS deadlines into actionable
 - **Assignment prerequisites** - View prerequisites and requirements before opening assignments
 - **Locked assignment detection** - See which assignments are locked and why
 - **Smart notifications** - Receive browser notifications at 3 days, 1 day, and 3 hours before deadlines
-- **Course announcements** - Stay informed with the latest course announcements
+- **Course announcements** - Stay informed with the latest course announcements and inbox messages
 - **Filtering and grouping** - Filter by Due Today, This Week, Overdue, or view all assignments
 - **Summary dashboard** - Quick stats showing due today, this week, and overdue counts
+- **Classes & Meeting Links** - Track your classes, meeting times, and quick links to Zoom/Google Meet/Teams
+- **Task completion sync** - Automatically marks assignments as done when submitted on Canvas
+- **Persistent task tracking** - Mark assignments as done locally and they stay marked across sessions
+- **Custom reminders** - Set personalized reminders for any deadline with preset options or custom times
 
 Perfect for students who want to never miss a deadline and stay organized throughout the semester.
 
@@ -60,13 +64,23 @@ Perfect for students who want to never miss a deadline and stay organized throug
 
 **Notifications Tab:**
 - View all announcements from your courses
+- See direct messages and inbox items
+- Message previews for quick scanning
 - Click any announcement to open it in Canvas
+
+**Classes Tab:**
+- Add your classes with subject names and meeting times
+- Store meeting links (Google Meet, Zoom, Teams, or other)
+- Edit or delete classes as needed
+- Quick access to your meeting links from the extension
+- Set reminders for upcoming classes
 
 **Syncing Data:**
 - Click **Sync** button to fetch the latest:
   - Assignments from all your courses
-  - Announcements from all courses
+  - Announcements and messages from all courses
   - Prerequisites and locked status information
+  - User submission status (auto-marks completed assignments)
 
 ## 🛠️ How Do I Run It?
 
@@ -141,22 +155,36 @@ This is a vanilla HTML/CSS/JavaScript extension with no bundler or build process
 - Grouped by TODAY, THIS WEEK, OVERDUE sections
 - Quick "All" view for everything
 
-### Assignment Details
+### Assignment Management
 - Course name and due date/time
 - Remaining time countdown
 - Prerequisites and requirements
 - Locked status with explanations
 - Direct links to Canvas
+- **Mark Done button** - Toggle assignment completion status
+- **Undo functionality** - Reverse your "Done" mark
+- **Auto-sync completion** - Automatically marks submissions done when submitted on Canvas
+- **Persistent tracking** - Marked assignments stay marked after closing the extension
 
-### Notifications
+### Class & Meeting Tracking
+- Add subjects with meeting times
+- Support for Google Meet, Zoom, Teams, and custom links
+- Quick access to meeting links
+- Edit and delete classes
+- Class reminders
+
+### Notifications System
 - Browser notifications at 3-day, 1-day, and 3-hour marks
 - Requires Interaction flag for urgent (3-hour) notifications
 - Click notifications to open assignment in Canvas
+- Custom reminder options (1hr, 12hrs, 1d, 2d, or custom)
 
-### Course Announcements
+### Course Communications
 - View latest announcements from all courses
+- See direct messages and inbox items
+- Message previews with HTML stripping
 - Sorted by newest first (30-day window)
-- Quick preview with link to full announcement
+- Quick links to open in Canvas
 
 ## 🔐 Privacy & Security
 
@@ -216,5 +244,13 @@ Have ideas to improve Deadline Guardian? Found a bug? Feel free to open an issue
 ---
 
 **Last Updated:** May 6, 2026  
-**Version:** 1.0.0  
+**Version:** 2.0.0  
 **Canvas API Version:** v1 (Canvas REST API)
+
+## 📝 Recent Updates (v2.0.0)
+- ✨ Added Classes tab for tracking subjects and meeting links
+- 🔄 Auto-sync task completion status from Canvas submissions
+- 📌 Persistent "Mark Done" functionality
+- 💬 Enhanced announcements with message previews
+- 🎯 Improved notification system with custom reminders
+- 🐛 Fixed announcements/notifications fetching

@@ -12,14 +12,24 @@ const els = {
   emptyState: document.getElementById("emptyState"),
   tab1Btn: document.getElementById("tab1Btn"),
   tab2Btn: document.getElementById("tab2Btn"),
+  tab3Btn: document.getElementById("tab3Btn"),
   page1: document.getElementById("page1"),
   page2: document.getElementById("page2"),
+  page3: document.getElementById("page3"),
   // We keep the original HTML IDs so your popup.html doesn't break
   notificationsList: document.getElementById("announcementsList"), 
   emptyNotifications: document.getElementById("emptyAnnouncements"),
   dueTodayCount: document.getElementById("dueTodayCount"),
   dueWeekCount: document.getElementById("dueWeekCount"),
-  overdueCount: document.getElementById("overdueCount")
+  overdueCount: document.getElementById("overdueCount"),
+  // Classes elements
+  classInput: document.getElementById("classInput"),
+  meetingLink: document.getElementById("meetingLink"),
+  meetingType: document.getElementById("meetingType"),
+  classTime: document.getElementById("classTime"),
+  addClass: document.getElementById("addClass"),
+  classList: document.getElementById("classList"),
+  emptyClasses: document.getElementById("emptyClasses")
 };
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -158,6 +168,19 @@ async function fetchAssignmentDetails(baseUrl, token, courseId, assignmentId) {
   }
 }
 
+async function fetchUserSubmission(baseUrl, token, courseId, assignmentId) {
+  try {
+    const submission = await canvasFetch(baseUrl, token, `/courses/${courseId}/assignments/${assignmentId}/submissions/self`);
+    return {
+      submitted: submission.submitted_at ? true : false,
+      grade: submission.grade || null,
+      workflowState: submission.workflow_state || "unsubmitted"
+    };
+  } catch (err) {
+    return { submitted: false, grade: null, workflowState: "unsubmitted" };
+  }
+}
+
 async function fetchAnnouncements(baseUrl, token) {
   try {
     const courses = await canvasFetch(baseUrl, token, "/courses?enrollment_state=active");
@@ -166,7 +189,7 @@ async function fetchAnnouncements(baseUrl, token) {
         try {
           const items = await canvasFetch(baseUrl, token, `/courses/${course.id}/announcements`);
           return items.map((ann) => ({
-            id: ann.id, 
+            id: `ann-${course.id}-${ann.id}`, 
             type: "announcement",
             courseId: course.id, 
             courseName: course.name || course.course_code || "Course",
@@ -175,18 +198,24 @@ async function fetchAnnouncements(baseUrl, token) {
             postedAt: ann.posted_at, 
             htmlUrl: ann.html_url,
           }));
-        } catch { return []; }
+        } catch (err) { 
+          console.error(`Failed to fetch announcements for course ${course.id}:`, err);
+          return []; 
+        }
       })
     );
     return announcementsLists.flat();
-  } catch { return []; }
+  } catch (err) { 
+    console.error("Failed to fetch announcements:", err);
+    return []; 
+  }
 }
 
 async function fetchInbox(baseUrl, token) {
   try {
     const messages = await canvasFetch(baseUrl, token, "/conversations");
     return messages.map((msg) => ({
-      id: msg.id,
+      id: `inbox-${msg.id}`,
       type: "inbox",
       courseName: msg.context_name || "Direct Message",
       title: msg.subject || "No Subject",
@@ -194,7 +223,10 @@ async function fetchInbox(baseUrl, token) {
       postedAt: msg.last_message_at,
       htmlUrl: `${baseUrl}/conversations/${msg.id}`
     }));
-  } catch { return []; }
+  } catch (err) { 
+    console.error("Failed to fetch inbox:", err);
+    return []; 
+  }
 }
 
 async function fetchDeadlines() {
@@ -216,11 +248,14 @@ async function fetchDeadlines() {
           const items = await canvasFetch(canvasUrl, apiToken, `/courses/${course.id}/assignments?bucket=upcoming&order_by=due_at`);
           return await Promise.all(items.map(async (a) => {
             const details = await fetchAssignmentDetails(canvasUrl, apiToken, course.id, a.id);
+            const submission = await fetchUserSubmission(canvasUrl, apiToken, course.id, a.id);
             return {
               id: a.id, courseId: course.id, courseName: course.name || course.course_code || "Course",
               title: a.name, dueAt: a.due_at, htmlUrl: a.html_url,
               prerequisites: details.prerequisites, description: details.description,
               locked: details.locked, lockExplanation: details.lockExplanation,
+              submitted: submission.submitted,
+              workflowState: submission.workflowState
             };
           }));
         } catch { return []; }
@@ -231,11 +266,19 @@ async function fetchDeadlines() {
     const deadlines = assignmentsLists.flat().filter((a) => a.dueAt && new Date(a.dueAt).getTime() >= now - 7 * DAY_MS)
       .sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
 
-    // Preserve the "Done" state
+    // Preserve the "Done" state and auto-mark submitted assignments
     if (oldDeadlines && Array.isArray(oldDeadlines)) {
       const doneSet = new Set(oldDeadlines.filter(d => d.isDone).map(d => d.id));
       deadlines.forEach(d => {
-        if (doneSet.has(d.id)) {
+        // Mark as done if manually marked OR if submitted on Canvas
+        if (doneSet.has(d.id) || d.submitted) {
+          d.isDone = true;
+        }
+      });
+    } else {
+      // First sync: mark submitted assignments as done
+      deadlines.forEach(d => {
+        if (d.submitted) {
           d.isDone = true;
         }
       });
@@ -590,12 +633,19 @@ function renderNotifications(notifications) {
     
     // Add an emoji icon based on what type of notification it is
     const icon = item.type === "inbox" ? "✉️" : "📢";
+    
+    // Strip HTML tags and truncate message
+    const messagePreview = item.message 
+      ? item.message.replace(/<[^>]*>/g, '').substring(0, 100) + (item.message.length > 100 ? "..." : "")
+      : "(No message)";
 
     div.innerHTML = `
       <p class="announcement-title">${icon} ${item.title}</p>
       <p class="announcement-course">${item.courseName}</p>
+      <p class="announcement-content">${messagePreview}</p>
       <p class="announcement-date">${formatDueDate(item.postedAt)}</p>
     `;
+    div.style.cursor = "pointer";
     div.addEventListener("click", () => { if (item.htmlUrl) chrome.tabs.create({ url: item.htmlUrl }); });
     fragment.appendChild(div);
   }
@@ -607,7 +657,146 @@ async function renderFromStorage() {
   renderDeadlines(deadlines || []);
   updateSummaryCounts(deadlines || []);
   renderNotifications(notifications || []);
+  await renderClasses();
 }
+
+async function renderClasses() {
+  const { classes } = await chrome.storage.local.get(["classes"]);
+  const classList = classes || [];
+  
+  els.classList.innerHTML = "";
+  
+  if (classList.length === 0) {
+    els.emptyClasses.classList.remove("hidden");
+    return;
+  }
+  els.emptyClasses.classList.add("hidden");
+  
+  const fragment = document.createDocumentFragment();
+  for (const cls of classList) {
+    const div = document.createElement("div");
+    div.className = "class-item";
+    
+    const meetingIcon = {
+      "google-meet": "🎥",
+      "zoom": "🎥",
+      "teams": "👥",
+      "other": "🔗"
+    }[cls.meetingType] || "🔗";
+    
+    const timeDisplay = cls.classTime ? ` - ${cls.classTime}` : "";
+    
+    div.innerHTML = `
+      <div class="class-header">
+        <p class="class-name">${cls.name}</p>
+        <button class="delete-class-btn" data-id="${cls.id}" title="Delete">✕</button>
+      </div>
+      <p class="class-time">${timeDisplay || "No time set"}</p>
+      <div class="class-actions">
+        ${cls.meetingLink ? `<a href="${cls.meetingLink}" target="_blank" class="class-link-btn">${meetingIcon} ${cls.meetingType.replace("-", " ").charAt(0).toUpperCase() + cls.meetingType.slice(1)}</a>` : '<span class="no-link">No link</span>'}
+        <button class="edit-class-btn" data-id="${cls.id}" title="Edit">Edit</button>
+        <button class="remind-class-btn" data-id="${cls.id}" title="Remind">🔔 Remind</button>
+      </div>
+    `;
+    
+    fragment.appendChild(div);
+  }
+  els.classList.appendChild(fragment);
+  
+  // Add event listeners
+  els.classList.querySelectorAll(".delete-class-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const { classes } = await chrome.storage.local.get(["classes"]);
+      const updated = (classes || []).filter(c => c.id !== id);
+      await chrome.storage.local.set({ classes: updated });
+      await renderClasses();
+      setStatus("Class deleted!", "success");
+      setTimeout(() => setStatus(""), 2000);
+    });
+  });
+  
+  els.classList.querySelectorAll(".edit-class-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const { classes } = await chrome.storage.local.get(["classes"]);
+      const cls = (classes || []).find(c => c.id === id);
+      if (cls) {
+        els.classInput.value = cls.name;
+        els.meetingLink.value = cls.meetingLink || "";
+        els.meetingType.value = cls.meetingType;
+        els.classTime.value = cls.classTime || "";
+        // Mark for editing
+        els.addClass.dataset.editId = id;
+        els.addClass.textContent = "Update Class";
+      }
+    });
+  });
+  
+  els.classList.querySelectorAll(".remind-class-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const { classes } = await chrome.storage.local.get(["classes"]);
+      const cls = (classes || []).find(c => c.id === id);
+      if (cls && cls.classTime) {
+        setStatus("Reminder set for " + cls.classTime, "success");
+        setTimeout(() => setStatus(""), 2000);
+      }
+    });
+  });
+}
+
+async function addClass() {
+  const name = els.classInput.value.trim();
+  const meetingLink = els.meetingLink.value.trim();
+  const meetingType = els.meetingType.value;
+  const classTime = els.classTime.value;
+  
+  if (!name) {
+    setStatus("Enter a class name", "error");
+    return;
+  }
+  
+  const { classes } = await chrome.storage.local.get(["classes"]);
+  let classList = classes || [];
+  
+  const editId = els.addClass.dataset.editId;
+  if (editId) {
+    // Update existing class
+    const idx = classList.findIndex(c => c.id === editId);
+    if (idx !== -1) {
+      classList[idx] = {
+        ...classList[idx],
+        name,
+        meetingLink,
+        meetingType,
+        classTime
+      };
+    }
+    els.addClass.dataset.editId = "";
+    els.addClass.textContent = "Add Class";
+  } else {
+    // Add new class
+    classList.push({
+      id: Date.now().toString(),
+      name,
+      meetingLink,
+      meetingType,
+      classTime
+    });
+  }
+  
+  await chrome.storage.local.set({ classes: classList });
+  els.classInput.value = "";
+  els.meetingLink.value = "";
+  els.meetingType.value = "google-meet";
+  els.classTime.value = "";
+  
+  await renderClasses();
+  setStatus("Class saved!", "success");
+  setTimeout(() => setStatus(""), 2000);
+}
+
 
 els.settingsToggle.addEventListener("click", () => els.settingsPanel.classList.toggle("hidden"));
 els.saveSettings.addEventListener("click", saveSettings);
@@ -616,22 +805,38 @@ els.syncBtn.addEventListener("click", fetchDeadlines);
 
 function switchTab(tabNumber) {
   els.page1.classList.remove("active");
+  els.page2.classList.remove("active");
+  els.page3.classList.remove("active");
+  els.page1.classList.add("hidden");
   els.page2.classList.add("hidden");
+  els.page3.classList.add("hidden");
   els.tab1Btn.classList.remove("active");
   els.tab2Btn.classList.remove("active");
+  els.tab3Btn.classList.remove("active");
 
   if (tabNumber === 1) {
+    els.page1.classList.remove("hidden");
     els.page1.classList.add("active");
     els.tab1Btn.classList.add("active");
   } else if (tabNumber === 2) {
     els.page2.classList.remove("hidden");
     els.page2.classList.add("active");
     els.tab2Btn.classList.add("active");
+  } else if (tabNumber === 3) {
+    els.page3.classList.remove("hidden");
+    els.page3.classList.add("active");
+    els.tab3Btn.classList.add("active");
   }
 }
 
 els.tab1Btn.addEventListener("click", () => switchTab(1));
 els.tab2Btn.addEventListener("click", () => switchTab(2));
+els.tab3Btn.addEventListener("click", () => {
+  switchTab(3);
+  renderClasses();
+});
+
+els.addClass.addEventListener("click", addClass);
 
 document.querySelectorAll(".filter-btn").forEach((btn) => {
   btn.addEventListener("click", async (e) => {
