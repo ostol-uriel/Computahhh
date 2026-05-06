@@ -14,8 +14,9 @@ const els = {
   tab2Btn: document.getElementById("tab2Btn"),
   page1: document.getElementById("page1"),
   page2: document.getElementById("page2"),
-  announcementsList: document.getElementById("announcementsList"),
-  emptyAnnouncements: document.getElementById("emptyAnnouncements"),
+  // We keep the original HTML IDs so your popup.html doesn't break
+  notificationsList: document.getElementById("announcementsList"), 
+  emptyNotifications: document.getElementById("emptyAnnouncements"),
   dueTodayCount: document.getElementById("dueTodayCount"),
   dueWeekCount: document.getElementById("dueWeekCount"),
   overdueCount: document.getElementById("overdueCount")
@@ -128,7 +129,7 @@ async function clearSettings() {
   els.apiToken.value = "";
   els.lastSync.textContent = "";
   renderDeadlines([]);
-  renderAnnouncements([]);
+  renderNotifications([]);
   setStatus("Cleared saved settings and data.", "success");
   setTimeout(() => setStatus(""), 1800);
 }
@@ -165,15 +166,34 @@ async function fetchAnnouncements(baseUrl, token) {
         try {
           const items = await canvasFetch(baseUrl, token, `/courses/${course.id}/announcements`);
           return items.map((ann) => ({
-            id: ann.id, courseId: course.id, courseName: course.name || course.course_code || "Course",
-            title: ann.title, message: ann.message, postedAt: ann.posted_at, htmlUrl: ann.html_url,
+            id: ann.id, 
+            type: "announcement",
+            courseId: course.id, 
+            courseName: course.name || course.course_code || "Course",
+            title: ann.title, 
+            message: ann.message, 
+            postedAt: ann.posted_at, 
+            htmlUrl: ann.html_url,
           }));
         } catch { return []; }
       })
     );
-    const now = Date.now();
-    return announcementsLists.flat().filter((a) => a.postedAt && new Date(a.postedAt).getTime() >= now - 30 * DAY_MS)
-      .sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
+    return announcementsLists.flat();
+  } catch { return []; }
+}
+
+async function fetchInbox(baseUrl, token) {
+  try {
+    const messages = await canvasFetch(baseUrl, token, "/conversations");
+    return messages.map((msg) => ({
+      id: msg.id,
+      type: "inbox",
+      courseName: msg.context_name || "Direct Message",
+      title: msg.subject || "No Subject",
+      message: msg.last_message,
+      postedAt: msg.last_message_at,
+      htmlUrl: `${baseUrl}/conversations/${msg.id}`
+    }));
   } catch { return []; }
 }
 
@@ -211,7 +231,7 @@ async function fetchDeadlines() {
     const deadlines = assignmentsLists.flat().filter((a) => a.dueAt && new Date(a.dueAt).getTime() >= now - 7 * DAY_MS)
       .sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
 
-    // Preserve the "Done" state from existing assignments before saving the synced list
+    // Preserve the "Done" state
     if (oldDeadlines && Array.isArray(oldDeadlines)) {
       const doneSet = new Set(oldDeadlines.filter(d => d.isDone).map(d => d.id));
       deadlines.forEach(d => {
@@ -221,15 +241,23 @@ async function fetchDeadlines() {
       });
     }
 
+    // Fetch Announcements & Inbox
     const announcements = await fetchAnnouncements(canvasUrl, apiToken);
+    const inbox = await fetchInbox(canvasUrl, apiToken);
+    
+    // Combine, filter out old ones (> 30 days), and sort chronologically
+    const notifications = [...announcements, ...inbox]
+      .filter((n) => n.postedAt && new Date(n.postedAt).getTime() >= now - 30 * DAY_MS)
+      .sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
+
     const lastSyncAt = new Date().toISOString();
     
-    await chrome.storage.local.set({ deadlines, announcements, lastSyncAt });
+    await chrome.storage.local.set({ deadlines, notifications, lastSyncAt });
     els.lastSync.textContent = `Last synced ${new Date(lastSyncAt).toLocaleString()}`;
 
     renderDeadlines(deadlines);
     updateSummaryCounts(deadlines);
-    renderAnnouncements(announcements);
+    renderNotifications(notifications);
     
     setStatus(`Synced ${deadlines.length} deadlines.`, "success");
     setTimeout(() => setStatus(""), 2200);
@@ -281,7 +309,7 @@ function renderDeadlines(deadlines, filter = "all") {
 
       const li = document.createElement("li");
       li.className = `deadline-item ${urgency}`;
-      li.style.position = "relative"; // Ensure dropdown doesn't clip
+      li.style.position = "relative";
 
       // Header
       const head = document.createElement("div");
@@ -516,7 +544,6 @@ function renderDeadlines(deadlines, filter = "all") {
         }
       };
 
-      // Set initial appearance when loading
       applyDoneState();
 
       doneBtn.addEventListener("click", async (e) => {
@@ -528,7 +555,6 @@ function renderDeadlines(deadlines, filter = "all") {
         setStatus(isMarkedDone ? "Marked as done!" : "Task un-marked!", "success");
         setTimeout(() => setStatus(""), 2000);
 
-        // Update the browser storage so it remembers your choice
         const { deadlines: savedDeadlines } = await chrome.storage.local.get(["deadlines"]);
         if (savedDeadlines) {
           const target = savedDeadlines.find(item => item.id === d.id);
@@ -548,34 +574,39 @@ function renderDeadlines(deadlines, filter = "all") {
   els.deadlineList.appendChild(fragment);
 }
 
-function renderAnnouncements(announcements) {
-  els.announcementsList.innerHTML = "";
-  if (!announcements || announcements.length === 0) {
-    els.emptyAnnouncements.classList.remove("hidden");
+function renderNotifications(notifications) {
+  els.notificationsList.innerHTML = "";
+  if (!notifications || notifications.length === 0) {
+    els.emptyNotifications.classList.remove("hidden");
+    els.emptyNotifications.textContent = "No recent notifications.";
     return;
   }
-  els.emptyAnnouncements.classList.add("hidden");
+  els.emptyNotifications.classList.add("hidden");
 
   const fragment = document.createDocumentFragment();
-  for (const ann of announcements) {
+  for (const item of notifications) {
     const div = document.createElement("div");
     div.className = "announcement-item";
+    
+    // Add an emoji icon based on what type of notification it is
+    const icon = item.type === "inbox" ? "✉️" : "📢";
+
     div.innerHTML = `
-      <p class="announcement-title">${ann.title}</p>
-      <p class="announcement-course">${ann.courseName}</p>
-      <p class="announcement-date">Posted: ${formatDueDate(ann.postedAt)}</p>
+      <p class="announcement-title">${icon} ${item.title}</p>
+      <p class="announcement-course">${item.courseName}</p>
+      <p class="announcement-date">${formatDueDate(item.postedAt)}</p>
     `;
-    div.addEventListener("click", () => { if (ann.htmlUrl) chrome.tabs.create({ url: ann.htmlUrl }); });
+    div.addEventListener("click", () => { if (item.htmlUrl) chrome.tabs.create({ url: item.htmlUrl }); });
     fragment.appendChild(div);
   }
-  els.announcementsList.appendChild(fragment);
+  els.notificationsList.appendChild(fragment);
 }
 
 async function renderFromStorage() {
-  const { deadlines, announcements } = await chrome.storage.local.get(["deadlines", "announcements"]);
+  const { deadlines, notifications } = await chrome.storage.local.get(["deadlines", "notifications"]);
   renderDeadlines(deadlines || []);
   updateSummaryCounts(deadlines || []);
-  renderAnnouncements(announcements || []);
+  renderNotifications(notifications || []);
 }
 
 els.settingsToggle.addEventListener("click", () => els.settingsPanel.classList.toggle("hidden"));
