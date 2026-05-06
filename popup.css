@@ -184,8 +184,156 @@ button.full-width {
   display: none !important;
 }
 
+/* Tab Navigation */
+.tabs-nav {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0;
+  margin: 0;
+}
+
+.tab-btn {
+  flex: 1;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+  border-radius: 0;
+}
+
+.tab-btn:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.tab-page {
+  display: none;
+  padding: 4px 16px 16px 16px;
+}
+
+.tab-page.active {
+  display: block;
+}
+
 main {
   padding: 4px 16px 16px 16px;
+}
+
+/* Summary Cards */
+.summary-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+  margin-top: 12px;
+}
+
+.summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.summary-card.due-today {
+  border-top: 4px solid #2f9e44;
+}
+
+.summary-card.due-week {
+  border-top: 4px solid #3b5bdb;
+}
+
+.summary-card.overdue {
+  border-top: 4px solid #e03131;
+}
+
+.summary-number {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.summary-card.due-today .summary-number {
+  color: #2f9e44;
+}
+
+.summary-card.due-week .summary-number {
+  color: #3b5bdb;
+}
+
+.summary-card.overdue .summary-number {
+  color: #e03131;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Filter Buttons */
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.filter-btn {
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.filter-btn.active {
+  background: #2f9e44;
+  color: #fff;
+  border-color: #2f9e44;
+}
+
+/* Deadline Container */
+.deadline-container {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.deadline-section-header {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  margin-top: 16px;
+  margin-bottom: 12px;
+  padding-left: 4px;
 }
 
 .deadline-list {
@@ -200,32 +348,119 @@ main {
 .deadline-item {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
   border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
+  padding: 14px;
+  margin-bottom: 10px;
   box-shadow: var(--shadow);
-  transition: border-color 0.15s ease, transform 0.05s ease;
+  transition: all 0.15s ease;
 }
 
 .deadline-item:hover {
-  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(59, 91, 219, 0.12);
 }
 
-.deadline-item:active {
-  transform: translateY(1px);
+.deadline-item.urgent {
+  border-left-color: #e03131;
+}
+
+.deadline-item.soon {
+  border-left-color: #f08c00;
+}
+
+.deadline-item.overdue {
+  border-left-color: #862e9c;
+}
+
+.deadline-item.normal {
+  border-left-color: #2f9e44;
+}
+
+.deadline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
 }
 
 .deadline-title {
   font-weight: 600;
-  font-size: 14px;
-  margin: 0 0 2px 0;
+  font-size: 15px;
+  margin: 0;
   line-height: 1.3;
+  flex: 1;
+  color: var(--text);
+}
+
+.urgency-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: #fff;
+  margin-left: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.urgency-badge.normal {
+  background: #2f9e44;
+}
+
+.urgency-badge.soon {
+  background: #f08c00;
+}
+
+.urgency-badge.urgent {
+  background: #e03131;
+}
+
+.urgency-badge.overdue {
+  background: #862e9c;
 }
 
 .deadline-course {
   font-size: 12px;
   color: var(--text-muted);
-  margin: 0 0 6px 0;
+  margin: 0 0 4px 0;
+  font-weight: 500;
+}
+
+.deadline-due {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 10px 0;
+}
+
+.deadline-prerequisites {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: none;
+}
+
+.deadline-prerequisites.show {
+  display: block;
+}
+
+.prerequisites-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+
+.prerequisites-content {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+  padding: 6px;
+  background: var(--bg);
+  border-radius: 6px;
 }
 
 .deadline-meta {
@@ -233,38 +468,98 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 12px;
 }
 
 .countdown {
   font-size: 12px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
 
-.urgency {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 3px 8px;
-  border-radius: 999px;
+/* Locked Indicator */
+.locked-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.lock-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.lock-text {
+  font-size: 12px;
+  color: #856404;
+  line-height: 1.4;
+}
+
+.deadline-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  flex: 1;
+  min-width: 60px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(59, 91, 219, 0.05);
+}
+
+.action-btn.open {
+  background: #2f9e44;
   color: #fff;
+  border-color: #2f9e44;
 }
 
-.urgency.normal {
-  background: var(--normal);
+.action-btn.open:hover {
+  background: #27842c;
+  border-color: #27842c;
 }
 
-.urgency.soon {
-  background: var(--soon);
+.action-btn.remind {
+  background: transparent;
+  color: var(--text);
 }
 
-.urgency.urgent {
-  background: var(--urgent);
+.action-btn.done {
+  background: transparent;
+  color: var(--text);
 }
 
-.urgency.overdue {
-  background: var(--overdue);
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
+.action-btn.open:disabled {
+  background: rgba(47, 158, 68, 0.3);
+  color: var(--text-muted);
+  border-color: var(--border);
 }
 
 .empty-state {
@@ -273,4 +568,58 @@ main {
   font-size: 13px;
   padding: 24px 8px;
   line-height: 1.5;
+}
+
+/* Announcements */
+.announcements-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.announcement-item {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.announcement-item:hover {
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(59, 91, 219, 0.12);
+}
+
+.announcement-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin: 0 0 4px 0;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.announcement-course {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+.announcement-content {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+  margin-bottom: 8px;
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.announcement-date {
+  font-size: 11px;
+  color: var(--text-muted);
 }

@@ -38,16 +38,58 @@
   </section>
 
   <section class="toolbar">
-    <button id="syncBtn" class="primary full-width">Sync Deadlines</button>
+    <button id="syncBtn" class="primary full-width">Sync</button>
     <p id="lastSync" class="last-sync"></p>
   </section>
 
   <section id="status" class="status hidden"></section>
 
-  <main>
-    <ul id="deadlineList" class="deadline-list"></ul>
-    <p id="emptyState" class="empty-state hidden">
-      No upcoming deadlines. Click <strong>Sync Deadlines</strong> to fetch from Canvas.
+  <!-- Tab Navigation -->
+  <nav class="tabs-nav">
+    <button id="tab1Btn" class="tab-btn active" data-tab="1">📋 Assignments</button>
+    <button id="tab2Btn" class="tab-btn" data-tab="2">🔔 Notifications</button>
+  </nav>
+
+  <!-- Page 1: Assignments -->
+  <main id="page1" class="tab-page active">
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+      <div class="summary-card due-today">
+        <div class="summary-number" id="dueTodayCount">0</div>
+        <div class="summary-label">Due Today</div>
+      </div>
+      <div class="summary-card due-week">
+        <div class="summary-number" id="dueWeekCount">0</div>
+        <div class="summary-label">This Week</div>
+      </div>
+      <div class="summary-card overdue">
+        <div class="summary-number" id="overdueCount">0</div>
+        <div class="summary-label">Overdue</div>
+      </div>
+    </div>
+
+    <!-- Filter Buttons -->
+    <div class="filter-buttons">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="today">Today</button>
+      <button class="filter-btn" data-filter="week">This Week</button>
+      <button class="filter-btn" data-filter="overdue">Overdue</button>
+    </div>
+
+    <!-- Deadlines List -->
+    <div id="deadlineContainer" class="deadline-container">
+      <ul id="deadlineList" class="deadline-list"></ul>
+      <p id="emptyState" class="empty-state hidden">
+        No upcoming deadlines. Click <strong>Sync Deadlines</strong> to fetch from Canvas.
+      </p>
+    </div>
+  </main>
+
+  <!-- Page 2: Notifications & Announcements -->
+  <main id="page2" class="tab-page hidden">
+    <div id="announcementsList" class="announcements-list"></div>
+    <p id="emptyAnnouncements" class="empty-state hidden">
+      No announcements yet.
     </p>
   </main>
 
