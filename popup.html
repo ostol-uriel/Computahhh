@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Deadline Guardian</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Deadline Guardian</h1>
+    <button id="settingsToggle" class="icon-btn" title="Settings" aria-label="Settings">&#9881;</button>
+  </header>
+
+  <section id="settingsPanel" class="settings-panel hidden">
+    <label for="canvasUrl">Canvas URL</label>
+    <input
+      type="url"
+      id="canvasUrl"
+      placeholder="https://canvas.instructure.com"
+      autocomplete="off"
+    />
+
+    <label for="apiToken">API Token</label>
+    <input
+      type="password"
+      id="apiToken"
+      placeholder="Personal access token"
+      autocomplete="off"
+    />
+
+    <div class="settings-actions">
+      <button id="saveSettings" class="primary">Save</button>
+      <button id="clearSettings" class="ghost">Clear</button>
+    </div>
+    <p class="hint">
+      Get a token from Canvas: Account &rarr; Settings &rarr; New Access Token.
+    </p>
+  </section>
+
+  <section class="toolbar">
+    <button id="syncBtn" class="primary full-width">Sync Deadlines</button>
+    <p id="lastSync" class="last-sync"></p>
+  </section>
+
+  <section id="status" class="status hidden"></section>
+
+  <main>
+    <ul id="deadlineList" class="deadline-list"></ul>
+    <p id="emptyState" class="empty-state hidden">
+      No upcoming deadlines. Click <strong>Sync Deadlines</strong> to fetch from Canvas.
+    </p>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>
