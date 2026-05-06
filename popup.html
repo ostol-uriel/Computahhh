@@ -96,7 +96,8 @@
 
   <!-- Page 3: Classes & Meeting Links -->
   <main id="page3" class="tab-page hidden">
-    <div class="classes-input-container">
+    <button id="addClassToggle" class="primary full-width">+ Add Class</button>
+    <div id="classFormContainer" class="classes-input-container hidden">
       <input type="text" id="classInput" class="class-input" placeholder="Subject name (e.g., Math 101)">
       <input type="url" id="meetingLink" class="class-input" placeholder="Meeting link (e.g., Google Meet URL)">
       <select id="meetingType" class="class-input">
@@ -105,9 +106,22 @@
         <option value="teams">Microsoft Teams</option>
         <option value="other">Other Link</option>
       </select>
+      <label class="days-label">Days</label>
+      <div class="days-picker" id="daysPicker">
+        <button type="button" class="day-btn" data-day="mon">Mon</button>
+        <button type="button" class="day-btn" data-day="tue">Tue</button>
+        <button type="button" class="day-btn" data-day="wed">Wed</button>
+        <button type="button" class="day-btn" data-day="thu">Thu</button>
+        <button type="button" class="day-btn" data-day="fri">Fri</button>
+        <button type="button" class="day-btn" data-day="sat">Sat</button>
+      </div>
       <input type="time" id="classTime" class="class-input">
-      <button id="addClass" class="primary full-width">Add Class</button>
+      <div class="class-form-actions">
+        <button id="addClass" class="primary">Save Class</button>
+        <button id="cancelClassForm" class="ghost">Cancel</button>
+      </div>
     </div>
+    <h2 id="classesSectionHeader" class="classes-section-header hidden">Upcoming Classes</h2>
     <div id="classList" class="classes-list"></div>
     <p id="emptyClasses" class="empty-state hidden">
       No classes added yet. Add your first class above.

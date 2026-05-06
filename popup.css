@@ -631,6 +631,10 @@ reminder-menu button:hover {
 }
 
 /* Classes Tab Styles */
+#addClassToggle {
+  margin-bottom: 12px;
+}
+
 .classes-input-container {
   display: flex;
   flex-direction: column;
@@ -640,6 +644,53 @@ reminder-menu button:hover {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.days-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 4px 0 -2px 0;
+}
+
+.days-picker {
+  display: flex;
+  gap: 6px;
+}
+
+.day-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.day-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.day-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.class-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.class-form-actions button {
+  flex: 1;
 }
 
 .class-input {
@@ -658,111 +709,201 @@ reminder-menu button:hover {
   background: var(--surface);
 }
 
+.classes-section-header {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 8px 0 12px 0;
+  letter-spacing: -0.01em;
+}
+
 .classes-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.class-item {
+.class-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 4px solid var(--primary);
-  border-radius: 10px;
-  padding: 12px;
+  border-radius: 12px;
+  padding: 16px;
   box-shadow: var(--shadow);
-  transition: all 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
 
-.class-item:hover {
-  box-shadow: 0 2px 8px rgba(59, 91, 219, 0.12);
+.class-card:hover {
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
 }
 
-.class-header {
+.class-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
-.class-name {
-  font-weight: 600;
-  font-size: 15px;
+.class-card-title {
+  font-size: 16px;
+  font-weight: 700;
   margin: 0;
+  line-height: 1.3;
   color: var(--text);
+  flex: 1;
+  word-break: break-word;
 }
 
-.delete-class-btn {
+.class-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.class-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.class-status-badge.starting-soon {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.class-status-badge.in-progress {
+  background: #fff3bf;
+  color: #b27d00;
+}
+
+.class-card-delete {
   background: transparent;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 18px;
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
   padding: 0;
-  width: 24px;
-  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
-.delete-class-btn:hover {
+.class-card:hover .class-card-delete {
+  opacity: 0.6;
+}
+
+.class-card-delete:hover {
+  opacity: 1 !important;
   color: #e03131;
+  background: #fff5f5;
 }
 
-.class-time {
-  font-size: 12px;
+.class-card-time {
+  font-size: 13px;
   color: var(--text-muted);
-  margin: 0 0 8px 0;
+  margin: 0 0 12px 0;
 }
 
-.class-actions {
+.class-card-pills {
   display: flex;
   gap: 6px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
 }
 
-.class-link-btn,
-.edit-class-btn,
-.remind-class-btn {
+.meeting-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: #fff;
+}
+
+.meeting-pill.google-meet {
+  background: #2f9e44;
+}
+
+.meeting-pill.zoom {
+  background: #3b5bdb;
+}
+
+.meeting-pill.teams {
+  background: #845ef7;
+}
+
+.meeting-pill.other {
+  background: #868e96;
+}
+
+.link-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+
+.link-pill.saved {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.link-pill.missing {
+  background: #ffe3e3;
+  color: #c92a2a;
+}
+
+.class-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.class-action-btn {
   flex: 1;
-  min-width: 70px;
-  padding: 8px 10px;
+  min-width: 0;
+  padding: 11px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  text-decoration: none;
-  display: inline-block;
-  text-align: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
-.class-link-btn {
-  background: #0078d4;
-  color: #fff;
-  border-color: #0078d4;
-}
-
-.class-link-btn:hover {
-  background: #005a9e;
-  border-color: #005a9e;
-}
-
-.edit-class-btn:hover {
+.class-action-btn:hover {
   border-color: var(--primary);
   color: var(--primary);
 }
 
-.remind-class-btn:hover {
-  border-color: #f08c00;
-  color: #f08c00;
+.class-action-btn.primary-action {
+  background: #519b4c;
+  border-color: #519b4c;
+  color: #fff;
 }
 
-.no-link {
-  color: var(--text-muted);
-  font-size: 12px;
+.class-action-btn.primary-action:hover {
+  background: #43833f;
+  border-color: #43833f;
+  color: #fff;
+}
+
+.class-action-btn.primary-action.wide {
+  flex: 2;
+}
+
+.class-action-btn .icon {
+  flex-shrink: 0;
 }

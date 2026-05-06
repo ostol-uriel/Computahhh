@@ -29,8 +29,78 @@ const els = {
   classTime: document.getElementById("classTime"),
   addClass: document.getElementById("addClass"),
   classList: document.getElementById("classList"),
-  emptyClasses: document.getElementById("emptyClasses")
+  emptyClasses: document.getElementById("emptyClasses"),
+  addClassToggle: document.getElementById("addClassToggle"),
+  classFormContainer: document.getElementById("classFormContainer"),
+  daysPicker: document.getElementById("daysPicker"),
+  cancelClassForm: document.getElementById("cancelClassForm"),
+  classesSectionHeader: document.getElementById("classesSectionHeader")
 };
+
+const DAY_LABELS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat" };
+const DAY_NUMBER = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+const MEETING_LABELS = {
+  "google-meet": "Google Meet",
+  "zoom": "Zoom",
+  "teams": "Microsoft Teams",
+  "other": "Other Link"
+};
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[ch]));
+}
+
+function normalizeMeetingLink(link) {
+  if (!link) return "";
+  const trimmed = link.trim();
+  if (!trimmed) return "";
+  if (!/^https?:\/\//i.test(trimmed)) return "https://" + trimmed;
+  return trimmed;
+}
+
+function getNextClassDate(cls, now = new Date()) {
+  if (!cls.days || !cls.days.length || !cls.classTime) return null;
+  const [hh, mm] = cls.classTime.split(":").map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+
+  const todayNum = now.getDay();
+  let best = null;
+  for (const d of cls.days) {
+    const target = DAY_NUMBER[d];
+    if (target === undefined) continue;
+    let daysAhead = (target - todayNum + 7) % 7;
+    const candidate = new Date(now);
+    candidate.setHours(hh, mm, 0, 0);
+    if (daysAhead === 0 && candidate.getTime() <= now.getTime()) daysAhead = 7;
+    candidate.setDate(candidate.getDate() + daysAhead);
+    if (!best || candidate < best) best = candidate;
+  }
+  return best;
+}
+
+function formatStartsIn(date, now = new Date()) {
+  if (!date) return null;
+  const diff = date.getTime() - now.getTime();
+  if (diff <= 0 && diff > -30 * 60000) return "In progress";
+  if (diff <= 0) return null;
+  const min = Math.round(diff / 60000);
+  if (min < 60) return `Starts in ${min} minute${min === 1 ? "" : "s"}`;
+  const hr = Math.round(diff / 3600000);
+  if (hr < 24) return `Starts in about ${hr} hour${hr === 1 ? "" : "s"}`;
+  const days = Math.round(diff / 86400000);
+  return `Starts in ${days} day${days === 1 ? "" : "s"}`;
+}
+
+function getClassStatus(date, now = new Date()) {
+  if (!date) return null;
+  const diff = date.getTime() - now.getTime();
+  if (diff <= 0 && diff > -30 * 60000) return { label: "In Progress", className: "in-progress" };
+  if (diff > 0 && diff <= 30 * 60000) return { label: "Starting Soon", className: "starting-soon" };
+  return null;
+}
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -662,50 +732,87 @@ async function renderFromStorage() {
 
 async function renderClasses() {
   const { classes } = await chrome.storage.local.get(["classes"]);
-  const classList = classes || [];
-  
+  const classList = (classes || []).slice();
+
   els.classList.innerHTML = "";
-  
+
   if (classList.length === 0) {
     els.emptyClasses.classList.remove("hidden");
+    if (els.classesSectionHeader) els.classesSectionHeader.classList.add("hidden");
     return;
   }
   els.emptyClasses.classList.add("hidden");
-  
+  if (els.classesSectionHeader) els.classesSectionHeader.classList.remove("hidden");
+
+  const now = new Date();
+  classList.forEach(c => { c._nextDate = getNextClassDate(c, now); });
+  classList.sort((a, b) => {
+    if (!a._nextDate && !b._nextDate) return 0;
+    if (!a._nextDate) return 1;
+    if (!b._nextDate) return -1;
+    return a._nextDate - b._nextDate;
+  });
+
+  const videoIcon = `<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
+
   const fragment = document.createDocumentFragment();
   for (const cls of classList) {
-    const div = document.createElement("div");
-    div.className = "class-item";
-    
-    const meetingIcon = {
-      "google-meet": "🎥",
-      "zoom": "🎥",
-      "teams": "👥",
-      "other": "🔗"
-    }[cls.meetingType] || "🔗";
-    
-    const timeDisplay = cls.classTime ? ` - ${cls.classTime}` : "";
-    
-    div.innerHTML = `
-      <div class="class-header">
-        <p class="class-name">${cls.name}</p>
-        <button class="delete-class-btn" data-id="${cls.id}" title="Delete">✕</button>
+    const card = document.createElement("div");
+    card.className = "class-card";
+
+    const meetingType = cls.meetingType || "other";
+    const meetingLabel = MEETING_LABELS[meetingType] || "Other Link";
+    const hasLink = !!cls.meetingLink;
+    const startsIn = formatStartsIn(cls._nextDate, now);
+    const status = getClassStatus(cls._nextDate, now);
+
+    const daysDisplay = (cls.days && cls.days.length)
+      ? cls.days.map(d => DAY_LABELS[d]).filter(Boolean).join(", ")
+      : "";
+    const scheduleFallbackParts = [daysDisplay, cls.classTime].filter(Boolean);
+    const scheduleFallback = scheduleFallbackParts.length ? scheduleFallbackParts.join(" · ") : "No schedule set";
+    const timeText = startsIn || scheduleFallback;
+
+    const statusBadgeHtml = status
+      ? `<span class="class-status-badge ${status.className}">${status.label}</span>`
+      : "";
+
+    const linkPillHtml = hasLink
+      ? `<span class="link-pill saved">Link Saved</span>`
+      : `<span class="link-pill missing">Missing Link</span>`;
+
+    const actionsHtml = hasLink
+      ? `<button class="class-action-btn primary-action btn-join" data-id="${cls.id}">${videoIcon}<span>Join Class</span></button>
+         <button class="class-action-btn btn-edit" data-id="${cls.id}">Edit Link</button>
+         <button class="class-action-btn btn-remind" data-id="${cls.id}">Remind Me</button>`
+      : `<button class="class-action-btn primary-action wide btn-edit" data-id="${cls.id}">Add Link</button>
+         <button class="class-action-btn btn-remind" data-id="${cls.id}">Remind Me</button>`;
+
+    card.innerHTML = `
+      <div class="class-card-header">
+        <h3 class="class-card-title">${escapeHtml(cls.name)}</h3>
+        <div class="class-card-header-right">
+          ${statusBadgeHtml}
+          <button class="class-card-delete" data-id="${cls.id}" title="Delete">✕</button>
+        </div>
       </div>
-      <p class="class-time">${timeDisplay || "No time set"}</p>
-      <div class="class-actions">
-        ${cls.meetingLink ? `<a href="${cls.meetingLink}" target="_blank" class="class-link-btn">${meetingIcon} ${cls.meetingType.replace("-", " ").charAt(0).toUpperCase() + cls.meetingType.slice(1)}</a>` : '<span class="no-link">No link</span>'}
-        <button class="edit-class-btn" data-id="${cls.id}" title="Edit">Edit</button>
-        <button class="remind-class-btn" data-id="${cls.id}" title="Remind">🔔 Remind</button>
+      <p class="class-card-time">${escapeHtml(timeText)}</p>
+      <div class="class-card-pills">
+        <span class="meeting-pill ${escapeHtml(meetingType)}">${escapeHtml(meetingLabel)}</span>
+        ${linkPillHtml}
+      </div>
+      <div class="class-card-actions">
+        ${actionsHtml}
       </div>
     `;
-    
-    fragment.appendChild(div);
+
+    fragment.appendChild(card);
   }
   els.classList.appendChild(fragment);
-  
-  // Add event listeners
-  els.classList.querySelectorAll(".delete-class-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
+
+  els.classList.querySelectorAll(".class-card-delete").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
       const id = btn.dataset.id;
       const { classes } = await chrome.storage.local.get(["classes"]);
       const updated = (classes || []).filter(c => c.id !== id);
@@ -715,54 +822,110 @@ async function renderClasses() {
       setTimeout(() => setStatus(""), 2000);
     });
   });
-  
-  els.classList.querySelectorAll(".edit-class-btn").forEach(btn => {
+
+  els.classList.querySelectorAll(".btn-join").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const { classes } = await chrome.storage.local.get(["classes"]);
+      const cls = (classes || []).find(c => c.id === id);
+      const url = normalizeMeetingLink(cls && cls.meetingLink);
+      if (url) chrome.tabs.create({ url });
+    });
+  });
+
+  els.classList.querySelectorAll(".btn-edit").forEach(btn => {
     btn.addEventListener("click", async () => {
       const id = btn.dataset.id;
       const { classes } = await chrome.storage.local.get(["classes"]);
       const cls = (classes || []).find(c => c.id === id);
       if (cls) {
+        showClassForm();
         els.classInput.value = cls.name;
         els.meetingLink.value = cls.meetingLink || "";
-        els.meetingType.value = cls.meetingType;
+        els.meetingType.value = cls.meetingType || "google-meet";
         els.classTime.value = cls.classTime || "";
-        // Mark for editing
+        setSelectedDays(cls.days || []);
         els.addClass.dataset.editId = id;
         els.addClass.textContent = "Update Class";
       }
     });
   });
-  
-  els.classList.querySelectorAll(".remind-class-btn").forEach(btn => {
+
+  els.classList.querySelectorAll(".btn-remind").forEach(btn => {
     btn.addEventListener("click", async () => {
       const id = btn.dataset.id;
       const { classes } = await chrome.storage.local.get(["classes"]);
       const cls = (classes || []).find(c => c.id === id);
-      if (cls && cls.classTime) {
-        setStatus("Reminder set for " + cls.classTime, "success");
-        setTimeout(() => setStatus(""), 2000);
+      if (!cls) return;
+      const next = getNextClassDate(cls, new Date());
+      if (!next) {
+        setStatus("Set days and a time first to schedule a reminder.", "error");
+        setTimeout(() => setStatus(""), 2500);
+        return;
       }
+      const remindAt = next.getTime() - 15 * 60 * 1000;
+      if (remindAt <= Date.now()) {
+        setStatus("Class is too soon to set a reminder.", "error");
+        setTimeout(() => setStatus(""), 2500);
+        return;
+      }
+      chrome.alarms.create(`class_${cls.id}`, { when: remindAt });
+      setStatus(`Reminder set for ${new Date(remindAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}`, "success");
+      setTimeout(() => setStatus(""), 3000);
     });
   });
 }
 
+function getSelectedDays() {
+  return Array.from(els.daysPicker.querySelectorAll(".day-btn.active"))
+    .map(btn => btn.dataset.day);
+}
+
+function setSelectedDays(days) {
+  const set = new Set(days || []);
+  els.daysPicker.querySelectorAll(".day-btn").forEach(btn => {
+    btn.classList.toggle("active", set.has(btn.dataset.day));
+  });
+}
+
+function resetClassForm() {
+  els.classInput.value = "";
+  els.meetingLink.value = "";
+  els.meetingType.value = "google-meet";
+  els.classTime.value = "";
+  setSelectedDays([]);
+  els.addClass.dataset.editId = "";
+  els.addClass.textContent = "Save Class";
+}
+
+function showClassForm() {
+  els.classFormContainer.classList.remove("hidden");
+  els.addClassToggle.classList.add("hidden");
+}
+
+function hideClassForm() {
+  els.classFormContainer.classList.add("hidden");
+  els.addClassToggle.classList.remove("hidden");
+  resetClassForm();
+}
+
 async function addClass() {
   const name = els.classInput.value.trim();
-  const meetingLink = els.meetingLink.value.trim();
+  const meetingLink = normalizeMeetingLink(els.meetingLink.value);
   const meetingType = els.meetingType.value;
   const classTime = els.classTime.value;
-  
+  const days = getSelectedDays();
+
   if (!name) {
     setStatus("Enter a class name", "error");
     return;
   }
-  
+
   const { classes } = await chrome.storage.local.get(["classes"]);
   let classList = classes || [];
-  
+
   const editId = els.addClass.dataset.editId;
   if (editId) {
-    // Update existing class
     const idx = classList.findIndex(c => c.id === editId);
     if (idx !== -1) {
       classList[idx] = {
@@ -770,28 +933,24 @@ async function addClass() {
         name,
         meetingLink,
         meetingType,
-        classTime
+        classTime,
+        days
       };
     }
-    els.addClass.dataset.editId = "";
-    els.addClass.textContent = "Add Class";
   } else {
-    // Add new class
     classList.push({
       id: Date.now().toString(),
       name,
       meetingLink,
       meetingType,
-      classTime
+      classTime,
+      days
     });
   }
-  
+
   await chrome.storage.local.set({ classes: classList });
-  els.classInput.value = "";
-  els.meetingLink.value = "";
-  els.meetingType.value = "google-meet";
-  els.classTime.value = "";
-  
+  hideClassForm();
+
   await renderClasses();
   setStatus("Class saved!", "success");
   setTimeout(() => setStatus(""), 2000);
@@ -837,6 +996,14 @@ els.tab3Btn.addEventListener("click", () => {
 });
 
 els.addClass.addEventListener("click", addClass);
+els.addClassToggle.addEventListener("click", () => {
+  resetClassForm();
+  showClassForm();
+});
+els.cancelClassForm.addEventListener("click", hideClassForm);
+els.daysPicker.querySelectorAll(".day-btn").forEach(btn => {
+  btn.addEventListener("click", () => btn.classList.toggle("active"));
+});
 
 document.querySelectorAll(".filter-btn").forEach((btn) => {
   btn.addEventListener("click", async (e) => {
