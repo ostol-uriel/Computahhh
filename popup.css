@@ -274,3 +274,14 @@ main {
   padding: 24px 8px;
   line-height: 1.5;
 }
+/* NEW: Prerequisite Warning Styles */
+.prereq-warning {
+  font-size: 11px;
+  color: #b3261e;
+  background-color: #f9dedc;
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  border-left: 3px solid #b3261e;
+}

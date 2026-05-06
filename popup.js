@@ -156,6 +156,9 @@ async function fetchDeadlines() {
             title: a.name,
             dueAt: a.due_at,
             htmlUrl: a.html_url,
+            // NEW: Grab the prerequisite/lock data from Canvas
+            isLocked: a.locked_for_user || false,
+            lockExplanation: a.lock_explanation || "Incomplete prerequisites."
           }));
         } catch {
           return [];
@@ -220,7 +223,8 @@ function renderDeadlines(deadlines) {
 
     const title = document.createElement("p");
     title.className = "deadline-title";
-    title.textContent = d.title;
+    // NEW: Add a lock icon to the title if it is locked
+    title.textContent = (d.isLocked ? "🔒 " : "") + d.title;
 
     const course = document.createElement("p");
     course.className = "deadline-course";
@@ -242,6 +246,15 @@ function renderDeadlines(deadlines) {
 
     li.appendChild(title);
     li.appendChild(course);
+    
+    // NEW: Inject the prerequisite warning div if locked
+    if (d.isLocked) {
+      const prereqWarning = document.createElement("div");
+      prereqWarning.className = "prereq-warning";
+      prereqWarning.innerHTML = `⚠️ <strong>Locked:</strong> ${d.lockExplanation}`;
+      li.appendChild(prereqWarning);
+    }
+    
     li.appendChild(meta);
 
     const open = () => {
