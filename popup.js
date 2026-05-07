@@ -21,87 +21,24 @@ const els = {
   dueTodayCount: document.getElementById("dueTodayCount"),
   dueWeekCount: document.getElementById("dueWeekCount"),
   overdueCount: document.getElementById("overdueCount"),
+  // New Classes Elements
+  addClassToggle: document.getElementById("addClassToggle"),
+  classFormContainer: document.getElementById("classFormContainer"),
   classInput: document.getElementById("classInput"),
   meetingLink: document.getElementById("meetingLink"),
   meetingType: document.getElementById("meetingType"),
   classTime: document.getElementById("classTime"),
-  addClass: document.getElementById("addClass"),
+  addClassBtn: document.getElementById("addClass"),
+  cancelClassForm: document.getElementById("cancelClassForm"),
   classList: document.getElementById("classList"),
   emptyClasses: document.getElementById("emptyClasses"),
-  addClassToggle: document.getElementById("addClassToggle"),
-  classFormContainer: document.getElementById("classFormContainer"),
-  daysPicker: document.getElementById("daysPicker"),
-  cancelClassForm: document.getElementById("cancelClassForm"),
-  classesSectionHeader: document.getElementById("classesSectionHeader")
+  classesSectionHeader: document.getElementById("classesSectionHeader"),
+  dayBtns: document.querySelectorAll(".day-btn")
 };
-
-const DAY_LABELS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat" };
-const DAY_NUMBER = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-const MEETING_LABELS = {
-  "google-meet": "Google Meet",
-  "zoom": "Zoom",
-  "teams": "Microsoft Teams",
-  "other": "Other Link"
-};
-
-function escapeHtml(str) {
-  if (str == null) return "";
-  return String(str).replace(/[&<>"']/g, ch => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[ch]));
-}
-
-function normalizeMeetingLink(link) {
-  if (!link) return "";
-  const trimmed = link.trim();
-  if (!trimmed) return "";
-  if (!/^https?:\/\//i.test(trimmed)) return "https://" + trimmed;
-  return trimmed;
-}
-
-function getNextClassDate(cls, now = new Date()) {
-  if (!cls.days || !cls.days.length || !cls.classTime) return null;
-  const [hh, mm] = cls.classTime.split(":").map(Number);
-  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
-
-  const todayNum = now.getDay();
-  let best = null;
-  for (const d of cls.days) {
-    const target = DAY_NUMBER[d];
-    if (target === undefined) continue;
-    let daysAhead = (target - todayNum + 7) % 7;
-    const candidate = new Date(now);
-    candidate.setHours(hh, mm, 0, 0);
-    if (daysAhead === 0 && candidate.getTime() <= now.getTime()) daysAhead = 7;
-    candidate.setDate(candidate.getDate() + daysAhead);
-    if (!best || candidate < best) best = candidate;
-  }
-  return best;
-}
-
-function formatStartsIn(date, now = new Date()) {
-  if (!date) return null;
-  const diff = date.getTime() - now.getTime();
-  if (diff <= 0 && diff > -30 * 60000) return "In progress";
-  if (diff <= 0) return null;
-  const min = Math.round(diff / 60000);
-  if (min < 60) return `Starts in ${min} minute${min === 1 ? "" : "s"}`;
-  const hr = Math.round(diff / 3600000);
-  if (hr < 24) return `Starts in about ${hr} hour${hr === 1 ? "" : "s"}`;
-  const days = Math.round(diff / 86400000);
-  return `Starts in ${days} day${days === 1 ? "" : "s"}`;
-}
-
-function getClassStatus(date, now = new Date()) {
-  if (!date) return null;
-  const diff = date.getTime() - now.getTime();
-  if (diff <= 0 && diff > -30 * 60000) return { label: "In Progress", className: "in-progress" };
-  if (diff > 0 && diff <= 30 * 60000) return { label: "Starting Soon", className: "starting-soon" };
-  return null;
-}
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+let selectedClassDays = [];
 
 function setStatus(message, kind = "info") {
   if (!message) {
@@ -164,24 +101,20 @@ function formatCountdown(dueMs, nowMs) {
   const hours = Math.floor((abs % DAY_MS) / HOUR_MS);
   const minutes = Math.floor((abs % HOUR_MS) / (60 * 1000));
 
-  // Build the time remaining text (e.g., "2d 4h" or "5h 30m")
   let timeText;
   if (days > 0) timeText = `${days}d ${hours}h`;
   else if (hours > 0) timeText = `${hours}h ${minutes}m`;
   else timeText = `${minutes}m`;
 
-  // If it has already passed
   if (diff < 0) {
     return `Overdue by ${timeText}`;
   }
 
-  // If the deadline is 24+ hours away (This Week / Later), include the day of the week
   if (days > 0) {
     const dayName = new Date(dueMs).toLocaleDateString(undefined, { weekday: 'long' });
     return `Due ${dayName} (in ${timeText})`;
   }
 
-  // If the deadline is under 24 hours away (Today), just show the countdown
   return `Due in ${timeText}`;
 }
 
@@ -221,6 +154,7 @@ async function clearSettings() {
   els.lastSync.textContent = "";
   renderDeadlines([]);
   renderNotifications([]);
+  renderClasses([]);
   setStatus("Cleared saved settings and data.", "success");
   setTimeout(() => setStatus(""), 1800);
 }
@@ -249,19 +183,6 @@ async function fetchAssignmentDetails(baseUrl, token, courseId, assignmentId) {
   }
 }
 
-async function fetchUserSubmission(baseUrl, token, courseId, assignmentId) {
-  try {
-    const submission = await canvasFetch(baseUrl, token, `/courses/${courseId}/assignments/${assignmentId}/submissions/self`);
-    return {
-      submitted: submission.submitted_at ? true : false,
-      grade: submission.grade || null,
-      workflowState: submission.workflow_state || "unsubmitted"
-    };
-  } catch (err) {
-    return { submitted: false, grade: null, workflowState: "unsubmitted" };
-  }
-}
-
 async function fetchAnnouncements(baseUrl, token) {
   try {
     const courses = await canvasFetch(baseUrl, token, "/courses?enrollment_state=active");
@@ -270,25 +191,23 @@ async function fetchAnnouncements(baseUrl, token) {
         try {
           const items = await canvasFetch(baseUrl, token, `/courses/${course.id}/announcements`);
           return items.map((ann) => ({
-            id: `ann-${course.id}-${ann.id}`, 
+            id: ann.id, 
             type: "announcement",
             courseId: course.id, 
             courseName: course.name || course.course_code || "Course",
             title: ann.title, 
             message: ann.message, 
-            postedAt: ann.posted_at, 
+            postedAt: ann.posted_at || ann.created_at, 
             htmlUrl: ann.html_url,
           }));
-        } catch (err) { 
-          console.error(`Failed to fetch announcements for course ${course.id}:`, err);
-          return []; 
+        } catch (e) {
+          return [];
         }
       })
     );
     return announcementsLists.flat();
-  } catch (err) { 
-    console.error("Failed to fetch announcements:", err);
-    return []; 
+  } catch (e) {
+    return [];
   }
 }
 
@@ -296,17 +215,16 @@ async function fetchInbox(baseUrl, token) {
   try {
     const messages = await canvasFetch(baseUrl, token, "/conversations");
     return messages.map((msg) => ({
-      id: `inbox-${msg.id}`,
+      id: msg.id,
       type: "inbox",
       courseName: msg.context_name || "Direct Message",
       title: msg.subject || "No Subject",
-      message: msg.last_message,
-      postedAt: msg.last_message_at,
-      htmlUrl: `${baseUrl}/conversations/${msg.id}`
+      message: msg.last_message || "Open to view message...",
+      postedAt: msg.last_message_at || msg.created_at,
+      htmlUrl: `${baseUrl}/conversations#filter=type=inbox&conversation_id=${msg.id}`
     }));
-  } catch (err) { 
-    console.error("Failed to fetch inbox:", err);
-    return []; 
+  } catch (e) {
+    return [];
   }
 }
 
@@ -329,14 +247,11 @@ async function fetchDeadlines() {
           const items = await canvasFetch(canvasUrl, apiToken, `/courses/${course.id}/assignments?bucket=upcoming&order_by=due_at`);
           return await Promise.all(items.map(async (a) => {
             const details = await fetchAssignmentDetails(canvasUrl, apiToken, course.id, a.id);
-            const submission = await fetchUserSubmission(canvasUrl, apiToken, course.id, a.id);
             return {
               id: a.id, courseId: course.id, courseName: course.name || course.course_code || "Course",
               title: a.name, dueAt: a.due_at, htmlUrl: a.html_url,
               prerequisites: details.prerequisites, description: details.description,
               locked: details.locked, lockExplanation: details.lockExplanation,
-              submitted: submission.submitted,
-              workflowState: submission.workflowState
             };
           }));
         } catch { return []; }
@@ -347,31 +262,20 @@ async function fetchDeadlines() {
     const deadlines = assignmentsLists.flat().filter((a) => a.dueAt && new Date(a.dueAt).getTime() >= now - 7 * DAY_MS)
       .sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
 
-    // Preserve the "Done" state and auto-mark submitted assignments
     if (oldDeadlines && Array.isArray(oldDeadlines)) {
       const doneSet = new Set(oldDeadlines.filter(d => d.isDone).map(d => d.id));
       deadlines.forEach(d => {
-        // Mark as done if manually marked OR if submitted on Canvas
-        if (doneSet.has(d.id) || d.submitted) {
-          d.isDone = true;
-        }
-      });
-    } else {
-      // First sync: mark submitted assignments as done
-      deadlines.forEach(d => {
-        if (d.submitted) {
+        if (doneSet.has(d.id)) {
           d.isDone = true;
         }
       });
     }
 
-    // Fetch Announcements & Inbox
     const announcements = await fetchAnnouncements(canvasUrl, apiToken);
     const inbox = await fetchInbox(canvasUrl, apiToken);
     
-    // Combine, filter out old ones (> 30 days), and sort chronologically
     const notifications = [...announcements, ...inbox]
-      .filter((n) => n.postedAt && new Date(n.postedAt).getTime() >= now - 30 * DAY_MS)
+      .filter((n) => n.postedAt && new Date(n.postedAt).getTime() >= now - 180 * DAY_MS)
       .sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
 
     const lastSyncAt = new Date().toISOString();
@@ -433,9 +337,8 @@ function renderDeadlines(deadlines, filter = "all") {
 
       const li = document.createElement("li");
       li.className = `deadline-item ${urgency}`;
-      li.style.position = "relative";
+      li.style.position = "relative"; 
 
-      // Header
       const head = document.createElement("div");
       head.className = "deadline-header";
       const title = document.createElement("p");
@@ -448,7 +351,6 @@ function renderDeadlines(deadlines, filter = "all") {
       head.appendChild(urgencyBadge);
       li.appendChild(head);
 
-      // Course Info
       const course = document.createElement("p");
       course.className = "deadline-course";
       course.textContent = d.courseName;
@@ -459,7 +361,6 @@ function renderDeadlines(deadlines, filter = "all") {
       due_info.textContent = `Due: ${formatDueDate(d.dueAt)}`;
       li.appendChild(due_info);
 
-      // Countdown
       const meta = document.createElement("div");
       meta.className = "deadline-meta";
       const countdown = document.createElement("span");
@@ -468,19 +369,16 @@ function renderDeadlines(deadlines, filter = "all") {
       meta.appendChild(countdown);
       li.appendChild(meta);
 
-      // Actions Container
       const actions = document.createElement("div");
       actions.className = "deadline-actions";
       actions.style.position = "relative"; 
 
-      // 1. OPEN BUTTON
       const openBtn = document.createElement("button");
       openBtn.className = "action-btn open";
       openBtn.textContent = "📂 Open";
       openBtn.addEventListener("click", () => { if (d.htmlUrl) chrome.tabs.create({ url: d.htmlUrl }); });
       actions.appendChild(openBtn);
 
-      // 2. REMIND BUTTON
       const remindBtn = document.createElement("button");
       remindBtn.className = "action-btn remind";
       remindBtn.textContent = "🔔 Remind";
@@ -508,7 +406,6 @@ function renderDeadlines(deadlines, filter = "all") {
 
         menu.addEventListener("click", (ev) => ev.stopPropagation());
 
-        // Predefined Options
         const suggestions = [
           { label: "1 hour before", ms: 60 * 60 * 1000 },
           { label: "12 hours before", ms: 12 * 60 * 60 * 1000 },
@@ -550,14 +447,12 @@ function renderDeadlines(deadlines, filter = "all") {
           });
         }
 
-        // Custom Time Divider
         const separator = document.createElement("div");
         separator.style.height = "1px";
         separator.style.background = "#eee";
         separator.style.margin = "4px 0";
         menu.appendChild(separator);
 
-        // Custom Time Header
         const customHeader = document.createElement("div");
         customHeader.textContent = "Custom Reminder";
         customHeader.style.padding = "8px 16px 4px 16px";
@@ -566,7 +461,6 @@ function renderDeadlines(deadlines, filter = "all") {
         customHeader.style.color = "#888";
         menu.appendChild(customHeader);
 
-        // Custom Time Inputs
         const customContainer = document.createElement("div");
         customContainer.style.display = "flex";
         customContainer.style.padding = "4px 16px 12px 16px";
@@ -635,7 +529,6 @@ function renderDeadlines(deadlines, filter = "all") {
 
         actions.appendChild(menu);
 
-        // Auto-close menu when clicking outside
         setTimeout(() => {
           const closeMenu = (evt) => {
             if (!menu.contains(evt.target)) {
@@ -649,7 +542,6 @@ function renderDeadlines(deadlines, filter = "all") {
 
       actions.appendChild(remindBtn);
 
-      // 3. DONE BUTTON (With Toggle and Storage Saving)
       const doneBtn = document.createElement("button");
       doneBtn.className = "action-btn done";
       doneBtn.disabled = d.locked;
@@ -702,7 +594,7 @@ function renderNotifications(notifications) {
   els.notificationsList.innerHTML = "";
   if (!notifications || notifications.length === 0) {
     els.emptyNotifications.classList.remove("hidden");
-    els.emptyNotifications.textContent = "No recent notifications.";
+    els.emptyNotifications.innerHTML = "No recent notifications in the last 6 months.";
     return;
   }
   els.emptyNotifications.classList.add("hidden");
@@ -712,278 +604,210 @@ function renderNotifications(notifications) {
     const div = document.createElement("div");
     div.className = "announcement-item";
     
-    // Add an emoji icon based on what type of notification it is
     const icon = item.type === "inbox" ? "✉️" : "📢";
-    
-    // Strip HTML tags and truncate message
-    const messagePreview = item.message 
-      ? item.message.replace(/<[^>]*>/g, '').substring(0, 100) + (item.message.length > 100 ? "..." : "")
-      : "(No message)";
 
     div.innerHTML = `
       <p class="announcement-title">${icon} ${item.title}</p>
       <p class="announcement-course">${item.courseName}</p>
-      <p class="announcement-content">${messagePreview}</p>
       <p class="announcement-date">${formatDueDate(item.postedAt)}</p>
     `;
-    div.style.cursor = "pointer";
     div.addEventListener("click", () => { if (item.htmlUrl) chrome.tabs.create({ url: item.htmlUrl }); });
     fragment.appendChild(div);
   }
   els.notificationsList.appendChild(fragment);
 }
 
-async function renderFromStorage() {
-  const { deadlines, notifications } = await chrome.storage.local.get(["deadlines", "notifications"]);
-  renderDeadlines(deadlines || []);
-  updateSummaryCounts(deadlines || []);
-  renderNotifications(notifications || []);
-  await renderClasses();
-}
+/* --- NEW: CLASSES LOGIC --- */
 
-async function renderClasses() {
-  const { classes } = await chrome.storage.local.get(["classes"]);
-  const classList = (classes || []).slice();
-
-  els.classList.innerHTML = "";
-
-  if (classList.length === 0) {
-    els.emptyClasses.classList.remove("hidden");
-    if (els.classesSectionHeader) els.classesSectionHeader.classList.add("hidden");
-    return;
-  }
-  els.emptyClasses.classList.add("hidden");
-  if (els.classesSectionHeader) els.classesSectionHeader.classList.remove("hidden");
-
-  const now = new Date();
-  classList.forEach(c => { c._nextDate = getNextClassDate(c, now); });
-  classList.sort((a, b) => {
-    if (!a._nextDate && !b._nextDate) return 0;
-    if (!a._nextDate) return 1;
-    if (!b._nextDate) return -1;
-    return a._nextDate - b._nextDate;
+// Handle day picker clicks
+els.dayBtns.forEach(btn => {
+  btn.addEventListener("click", (e) => {
+    const day = e.target.dataset.day;
+    if (selectedClassDays.includes(day)) {
+      selectedClassDays = selectedClassDays.filter(d => d !== day);
+      e.target.classList.remove("active");
+    } else {
+      selectedClassDays.push(day);
+      e.target.classList.add("active");
+    }
   });
+});
 
-  const videoIcon = `<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
+// Show/Hide form
+els.addClassToggle.addEventListener("click", () => {
+  els.classFormContainer.classList.remove("hidden");
+  els.addClassToggle.classList.add("hidden");
+});
 
-  const fragment = document.createDocumentFragment();
-  for (const cls of classList) {
-    const card = document.createElement("div");
-    card.className = "class-card";
-
-    const meetingType = cls.meetingType || "other";
-    const meetingLabel = MEETING_LABELS[meetingType] || "Other Link";
-    const hasLink = !!cls.meetingLink;
-    const startsIn = formatStartsIn(cls._nextDate, now);
-    const status = getClassStatus(cls._nextDate, now);
-
-    const daysDisplay = (cls.days && cls.days.length)
-      ? cls.days.map(d => DAY_LABELS[d]).filter(Boolean).join(", ")
-      : "";
-    const scheduleFallbackParts = [daysDisplay, cls.classTime].filter(Boolean);
-    const scheduleFallback = scheduleFallbackParts.length ? scheduleFallbackParts.join(" · ") : "No schedule set";
-    const timeText = startsIn || scheduleFallback;
-
-    const statusBadgeHtml = status
-      ? `<span class="class-status-badge ${status.className}">${status.label}</span>`
-      : "";
-
-    const linkPillHtml = hasLink
-      ? `<span class="link-pill saved">Link Saved</span>`
-      : `<span class="link-pill missing">Missing Link</span>`;
-
-    const actionsHtml = hasLink
-      ? `<button class="class-action-btn primary-action btn-join" data-id="${cls.id}">${videoIcon}<span>Join Class</span></button>
-         <button class="class-action-btn btn-edit" data-id="${cls.id}">Edit Link</button>
-         <button class="class-action-btn btn-remind" data-id="${cls.id}">Remind Me</button>`
-      : `<button class="class-action-btn primary-action wide btn-edit" data-id="${cls.id}">Add Link</button>
-         <button class="class-action-btn btn-remind" data-id="${cls.id}">Remind Me</button>`;
-
-    card.innerHTML = `
-      <div class="class-card-header">
-        <h3 class="class-card-title">${escapeHtml(cls.name)}</h3>
-        <div class="class-card-header-right">
-          ${statusBadgeHtml}
-          <button class="class-card-delete" data-id="${cls.id}" title="Delete">✕</button>
-        </div>
-      </div>
-      <p class="class-card-time">${escapeHtml(timeText)}</p>
-      <div class="class-card-pills">
-        <span class="meeting-pill ${escapeHtml(meetingType)}">${escapeHtml(meetingLabel)}</span>
-        ${linkPillHtml}
-      </div>
-      <div class="class-card-actions">
-        ${actionsHtml}
-      </div>
-    `;
-
-    fragment.appendChild(card);
-  }
-  els.classList.appendChild(fragment);
-
-  els.classList.querySelectorAll(".class-card-delete").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      const { classes } = await chrome.storage.local.get(["classes"]);
-      const updated = (classes || []).filter(c => c.id !== id);
-      await chrome.storage.local.set({ classes: updated });
-      await renderClasses();
-      setStatus("Class deleted!", "success");
-      setTimeout(() => setStatus(""), 2000);
-    });
-  });
-
-  els.classList.querySelectorAll(".btn-join").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      const { classes } = await chrome.storage.local.get(["classes"]);
-      const cls = (classes || []).find(c => c.id === id);
-      const url = normalizeMeetingLink(cls && cls.meetingLink);
-      if (url) chrome.tabs.create({ url });
-    });
-  });
-
-  els.classList.querySelectorAll(".btn-edit").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      const { classes } = await chrome.storage.local.get(["classes"]);
-      const cls = (classes || []).find(c => c.id === id);
-      if (cls) {
-        showClassForm();
-        els.classInput.value = cls.name;
-        els.meetingLink.value = cls.meetingLink || "";
-        els.meetingType.value = cls.meetingType || "google-meet";
-        els.classTime.value = cls.classTime || "";
-        setSelectedDays(cls.days || []);
-        els.addClass.dataset.editId = id;
-        els.addClass.textContent = "Update Class";
-      }
-    });
-  });
-
-  els.classList.querySelectorAll(".btn-remind").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      const { classes } = await chrome.storage.local.get(["classes"]);
-      const cls = (classes || []).find(c => c.id === id);
-      if (!cls) return;
-      const next = getNextClassDate(cls, new Date());
-      if (!next) {
-        setStatus("Set days and a time first to schedule a reminder.", "error");
-        setTimeout(() => setStatus(""), 2500);
-        return;
-      }
-      const remindAt = next.getTime() - 15 * 60 * 1000;
-      if (remindAt <= Date.now()) {
-        setStatus("Class is too soon to set a reminder.", "error");
-        setTimeout(() => setStatus(""), 2500);
-        return;
-      }
-      chrome.alarms.create(`class_${cls.id}`, { when: remindAt });
-      setStatus(`Reminder set for ${new Date(remindAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}`, "success");
-      setTimeout(() => setStatus(""), 3000);
-    });
-  });
-}
-
-function getSelectedDays() {
-  return Array.from(els.daysPicker.querySelectorAll(".day-btn.active"))
-    .map(btn => btn.dataset.day);
-}
-
-function setSelectedDays(days) {
-  const set = new Set(days || []);
-  els.daysPicker.querySelectorAll(".day-btn").forEach(btn => {
-    btn.classList.toggle("active", set.has(btn.dataset.day));
-  });
-}
+els.cancelClassForm.addEventListener("click", () => {
+  resetClassForm();
+});
 
 function resetClassForm() {
   els.classInput.value = "";
   els.meetingLink.value = "";
   els.meetingType.value = "google-meet";
   els.classTime.value = "";
-  setSelectedDays([]);
-  els.addClass.dataset.editId = "";
-  els.addClass.textContent = "Save Class";
-}
-
-function showClassForm() {
-  els.classFormContainer.classList.remove("hidden");
-  els.addClassToggle.classList.add("hidden");
-}
-
-function hideClassForm() {
+  selectedClassDays = [];
+  els.dayBtns.forEach(btn => btn.classList.remove("active"));
+  
   els.classFormContainer.classList.add("hidden");
   els.addClassToggle.classList.remove("hidden");
-  resetClassForm();
 }
 
-async function addClass() {
-  const name = els.classInput.value.trim();
-  const meetingLink = normalizeMeetingLink(els.meetingLink.value);
-  const meetingType = els.meetingType.value;
-  const classTime = els.classTime.value;
-  const days = getSelectedDays();
+// Calculate days until next occurrence
+function getDaysUntilNextClass(daysArray) {
+  if (!daysArray || daysArray.length === 0) return "No days set";
+  
+  const map = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  const today = new Date().getDay();
+  
+  let daysUntil = 7;
+  for (const dayStr of daysArray) {
+    const targetDay = map[dayStr];
+    let diff = targetDay - today;
+    if (diff < 0) diff += 7;
+    if (diff < daysUntil) daysUntil = diff;
+  }
+  
+  if (daysUntil === 0) return "Today";
+  if (daysUntil === 1) return "Starts in 1 day";
+  return `Starts in ${daysUntil} days`;
+}
 
-  if (!name) {
-    setStatus("Enter a class name", "error");
+// Save Class
+els.addClassBtn.addEventListener("click", async () => {
+  const title = els.classInput.value.trim();
+  const link = els.meetingLink.value.trim();
+  const type = els.meetingType.value;
+  const time = els.classTime.value;
+
+  if (!title || selectedClassDays.length === 0) {
+    setStatus("Please enter a subject name and select at least one day.", "error");
+    setTimeout(() => setStatus(""), 2500);
     return;
   }
 
-  const { classes } = await chrome.storage.local.get(["classes"]);
-  let classList = classes || [];
+  const newClass = {
+    id: 'class-' + Date.now(),
+    title,
+    link,
+    type,
+    days: [...selectedClassDays],
+    time
+  };
 
-  const editId = els.addClass.dataset.editId;
-  if (editId) {
-    const idx = classList.findIndex(c => c.id === editId);
-    if (idx !== -1) {
-      classList[idx] = {
-        ...classList[idx],
-        name,
-        meetingLink,
-        meetingType,
-        classTime,
-        days
-      };
-    }
-  } else {
-    classList.push({
-      id: Date.now().toString(),
-      name,
-      meetingLink,
-      meetingType,
-      classTime,
-      days
-    });
-  }
-
-  await chrome.storage.local.set({ classes: classList });
-  hideClassForm();
-
-  await renderClasses();
-  setStatus("Class saved!", "success");
+  const { myClasses = [] } = await chrome.storage.local.get("myClasses");
+  myClasses.push(newClass);
+  await chrome.storage.local.set({ myClasses });
+  
+  setStatus("Class added successfully!", "success");
   setTimeout(() => setStatus(""), 2000);
+  
+  resetClassForm();
+  renderClasses(myClasses);
+});
+
+function renderClasses(classesArr) {
+  els.classList.innerHTML = "";
+  if (!classesArr || classesArr.length === 0) {
+    els.emptyClasses.classList.remove("hidden");
+    els.classesSectionHeader.classList.add("hidden");
+    return;
+  }
+  
+  els.emptyClasses.classList.add("hidden");
+  els.classesSectionHeader.classList.remove("hidden");
+
+  const fragment = document.createDocumentFragment();
+
+  classesArr.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "class-card";
+
+    const startsInText = getDaysUntilNextClass(c.days);
+    const linkStatus = c.link ? "Meeting Link Saved" : "No link added";
+    
+    // Convert 24hr time to 12hr for display if time exists
+    let displayTime = "";
+    if (c.time) {
+      let [hours, minutes] = c.time.split(":");
+      let period = "AM";
+      hours = parseInt(hours, 10);
+      if (hours >= 12) {
+        period = "PM";
+        if (hours > 12) hours -= 12;
+      }
+      if (hours === 0) hours = 12;
+      displayTime = ` at ${hours}:${minutes} ${period}`;
+    }
+
+    div.innerHTML = `
+      <div class="class-card-header">
+        <h3 class="class-title">${c.title}</h3>
+        <button class="dismiss-btn" data-id="${c.id}" title="Remove Class">&#10005;</button>
+      </div>
+      <p class="class-time">${startsInText}${displayTime}</p>
+      <p class="class-link-status">${linkStatus}</p>
+      <div class="class-actions">
+        <button class="class-action-btn join-btn" data-link="${c.link}">
+          <span class="icon">&#128249;</span> Join Class
+        </button>
+      </div>
+    `;
+
+    // Handle Join
+    const joinBtn = div.querySelector('.join-btn');
+    joinBtn.addEventListener('click', () => {
+      if (c.link) {
+        chrome.tabs.create({ url: c.link });
+      } else {
+        setStatus("No meeting link saved for this class.", "error");
+        setTimeout(() => setStatus(""), 2000);
+      }
+    });
+
+    // Handle Delete
+    const deleteBtn = div.querySelector('.dismiss-btn');
+    deleteBtn.addEventListener('click', async () => {
+      const { myClasses = [] } = await chrome.storage.local.get("myClasses");
+      const updatedClasses = myClasses.filter(item => item.id !== c.id);
+      await chrome.storage.local.set({ myClasses: updatedClasses });
+      renderClasses(updatedClasses);
+      setStatus("Class removed.", "success");
+      setTimeout(() => setStatus(""), 2000);
+    });
+
+    fragment.appendChild(div);
+  });
+
+  els.classList.appendChild(fragment);
 }
 
+// Ensure classes are loaded on startup
+async function renderFromStorage() {
+  const { deadlines, notifications, myClasses } = await chrome.storage.local.get(["deadlines", "notifications", "myClasses"]);
+  renderDeadlines(deadlines || []);
+  updateSummaryCounts(deadlines || []);
+  renderNotifications(notifications || []);
+  renderClasses(myClasses || []);
+}
 
-els.settingsToggle.addEventListener("click", () => els.settingsPanel.classList.toggle("hidden"));
-els.saveSettings.addEventListener("click", saveSettings);
-els.clearSettings.addEventListener("click", clearSettings);
-els.syncBtn.addEventListener("click", fetchDeadlines);
-
+// --- TAB SWITCHING ---
 function switchTab(tabNumber) {
-  els.page1.classList.remove("active");
-  els.page2.classList.remove("active");
-  els.page3.classList.remove("active");
+  // Hide all
   els.page1.classList.add("hidden");
   els.page2.classList.add("hidden");
   els.page3.classList.add("hidden");
+  els.page1.classList.remove("active");
+  els.page2.classList.remove("active");
+  els.page3.classList.remove("active");
+  
   els.tab1Btn.classList.remove("active");
   els.tab2Btn.classList.remove("active");
   els.tab3Btn.classList.remove("active");
 
+  // Show selected
   if (tabNumber === 1) {
     els.page1.classList.remove("hidden");
     els.page1.classList.add("active");
@@ -999,22 +823,14 @@ function switchTab(tabNumber) {
   }
 }
 
+els.settingsToggle.addEventListener("click", () => els.settingsPanel.classList.toggle("hidden"));
+els.saveSettings.addEventListener("click", saveSettings);
+els.clearSettings.addEventListener("click", clearSettings);
+els.syncBtn.addEventListener("click", fetchDeadlines);
+
 els.tab1Btn.addEventListener("click", () => switchTab(1));
 els.tab2Btn.addEventListener("click", () => switchTab(2));
-els.tab3Btn.addEventListener("click", () => {
-  switchTab(3);
-  renderClasses();
-});
-
-els.addClass.addEventListener("click", addClass);
-els.addClassToggle.addEventListener("click", () => {
-  resetClassForm();
-  showClassForm();
-});
-els.cancelClassForm.addEventListener("click", hideClassForm);
-els.daysPicker.querySelectorAll(".day-btn").forEach(btn => {
-  btn.addEventListener("click", () => btn.classList.toggle("active"));
-});
+els.tab3Btn.addEventListener("click", () => switchTab(3));
 
 document.querySelectorAll(".filter-btn").forEach((btn) => {
   btn.addEventListener("click", async (e) => {
