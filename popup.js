@@ -16,13 +16,11 @@ const els = {
   page1: document.getElementById("page1"),
   page2: document.getElementById("page2"),
   page3: document.getElementById("page3"),
-  // We keep the original HTML IDs so your popup.html doesn't break
   notificationsList: document.getElementById("announcementsList"), 
   emptyNotifications: document.getElementById("emptyAnnouncements"),
   dueTodayCount: document.getElementById("dueTodayCount"),
   dueWeekCount: document.getElementById("dueWeekCount"),
   overdueCount: document.getElementById("overdueCount"),
-  // Classes elements
   classInput: document.getElementById("classInput"),
   meetingLink: document.getElementById("meetingLink"),
   meetingType: document.getElementById("meetingType"),
