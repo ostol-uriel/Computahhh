@@ -21,24 +21,88 @@ const els = {
   dueTodayCount: document.getElementById("dueTodayCount"),
   dueWeekCount: document.getElementById("dueWeekCount"),
   overdueCount: document.getElementById("overdueCount"),
-  // New Classes Elements
-  addClassToggle: document.getElementById("addClassToggle"),
-  classFormContainer: document.getElementById("classFormContainer"),
+  // Classes elements
   classInput: document.getElementById("classInput"),
   meetingLink: document.getElementById("meetingLink"),
   meetingType: document.getElementById("meetingType"),
   classTime: document.getElementById("classTime"),
-  addClassBtn: document.getElementById("addClass"),
-  cancelClassForm: document.getElementById("cancelClassForm"),
+  addClass: document.getElementById("addClass"),
   classList: document.getElementById("classList"),
   emptyClasses: document.getElementById("emptyClasses"),
-  classesSectionHeader: document.getElementById("classesSectionHeader"),
-  dayBtns: document.querySelectorAll(".day-btn")
+  addClassToggle: document.getElementById("addClassToggle"),
+  classFormContainer: document.getElementById("classFormContainer"),
+  daysPicker: document.getElementById("daysPicker"),
+  cancelClassForm: document.getElementById("cancelClassForm"),
+  classesSectionHeader: document.getElementById("classesSectionHeader")
 };
+
+const DAY_LABELS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat" };
+const DAY_NUMBER = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+const MEETING_LABELS = {
+  "google-meet": "Google Meet",
+  "zoom": "Zoom",
+  "teams": "Microsoft Teams",
+  "other": "Other Link"
+};
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[ch]));
+}
+
+function normalizeMeetingLink(link) {
+  if (!link) return "";
+  const trimmed = link.trim();
+  if (!trimmed) return "";
+  if (!/^https?:\/\//i.test(trimmed)) return "https://" + trimmed;
+  return trimmed;
+}
+
+function getNextClassDate(cls, now = new Date()) {
+  if (!cls.days || !cls.days.length || !cls.classTime) return null;
+  const [hh, mm] = cls.classTime.split(":").map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+
+  const todayNum = now.getDay();
+  let best = null;
+  for (const d of cls.days) {
+    const target = DAY_NUMBER[d];
+    if (target === undefined) continue;
+    let daysAhead = (target - todayNum + 7) % 7;
+    const candidate = new Date(now);
+    candidate.setHours(hh, mm, 0, 0);
+    if (daysAhead === 0 && candidate.getTime() <= now.getTime()) daysAhead = 7;
+    candidate.setDate(candidate.getDate() + daysAhead);
+    if (!best || candidate < best) best = candidate;
+  }
+  return best;
+}
+
+function formatStartsIn(date, now = new Date()) {
+  if (!date) return null;
+  const diff = date.getTime() - now.getTime();
+  if (diff <= 0 && diff > -30 * 60000) return "In progress";
+  if (diff <= 0) return null;
+  const min = Math.round(diff / 60000);
+  if (min < 60) return `Starts in ${min} minute${min === 1 ? "" : "s"}`;
+  const hr = Math.round(diff / 3600000);
+  if (hr < 24) return `Starts in about ${hr} hour${hr === 1 ? "" : "s"}`;
+  const days = Math.round(diff / 86400000);
+  return `Starts in ${days} day${days === 1 ? "" : "s"}`;
+}
+
+function getClassStatus(date, now = new Date()) {
+  if (!date) return null;
+  const diff = date.getTime() - now.getTime();
+  if (diff <= 0 && diff > -30 * 60000) return { label: "In Progress", className: "in-progress" };
+  if (diff > 0 && diff <= 30 * 60000) return { label: "Starting Soon", className: "starting-soon" };
+  return null;
+}
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
-let selectedClassDays = [];
 
 function setStatus(message, kind = "info") {
   if (!message) {
@@ -154,7 +218,7 @@ async function clearSettings() {
   els.lastSync.textContent = "";
   renderDeadlines([]);
   renderNotifications([]);
-  renderClasses([]);
+  await renderClasses();
   setStatus("Cleared saved settings and data.", "success");
   setTimeout(() => setStatus(""), 1800);
 }
@@ -617,180 +681,250 @@ function renderNotifications(notifications) {
   els.notificationsList.appendChild(fragment);
 }
 
-/* --- NEW: CLASSES LOGIC --- */
+/* --- CLASSES LOGIC --- */
 
-// Handle day picker clicks
-els.dayBtns.forEach(btn => {
-  btn.addEventListener("click", (e) => {
-    const day = e.target.dataset.day;
-    if (selectedClassDays.includes(day)) {
-      selectedClassDays = selectedClassDays.filter(d => d !== day);
-      e.target.classList.remove("active");
-    } else {
-      selectedClassDays.push(day);
-      e.target.classList.add("active");
-    }
-  });
+// Day picker — toggle active state via event delegation
+els.daysPicker.addEventListener("click", (e) => {
+  const btn = e.target.closest(".day-btn");
+  if (!btn) return;
+  btn.classList.toggle("active");
 });
 
 // Show/Hide form
 els.addClassToggle.addEventListener("click", () => {
-  els.classFormContainer.classList.remove("hidden");
-  els.addClassToggle.classList.add("hidden");
+  showClassForm();
 });
 
 els.cancelClassForm.addEventListener("click", () => {
   resetClassForm();
 });
 
+function showClassForm() {
+  els.classFormContainer.classList.remove("hidden");
+  els.addClassToggle.classList.add("hidden");
+}
+
+function hideClassForm() {
+  els.classFormContainer.classList.add("hidden");
+  els.addClassToggle.classList.remove("hidden");
+}
+
+function getSelectedDays() {
+  return Array.from(els.daysPicker.querySelectorAll(".day-btn.active"))
+    .map(btn => btn.dataset.day);
+}
+
+function setSelectedDays(days) {
+  const set = new Set(days || []);
+  els.daysPicker.querySelectorAll(".day-btn").forEach(btn => {
+    btn.classList.toggle("active", set.has(btn.dataset.day));
+  });
+}
+
 function resetClassForm() {
   els.classInput.value = "";
   els.meetingLink.value = "";
   els.meetingType.value = "google-meet";
   els.classTime.value = "";
-  selectedClassDays = [];
-  els.dayBtns.forEach(btn => btn.classList.remove("active"));
-  
-  els.classFormContainer.classList.add("hidden");
-  els.addClassToggle.classList.remove("hidden");
+  setSelectedDays([]);
+  els.addClass.dataset.editId = "";
+  els.addClass.textContent = "Save Class";
+  hideClassForm();
 }
 
-// Calculate days until next occurrence
-function getDaysUntilNextClass(daysArray) {
-  if (!daysArray || daysArray.length === 0) return "No days set";
-  
-  const map = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-  const today = new Date().getDay();
-  
-  let daysUntil = 7;
-  for (const dayStr of daysArray) {
-    const targetDay = map[dayStr];
-    let diff = targetDay - today;
-    if (diff < 0) diff += 7;
-    if (diff < daysUntil) daysUntil = diff;
-  }
-  
-  if (daysUntil === 0) return "Today";
-  if (daysUntil === 1) return "Starts in 1 day";
-  return `Starts in ${daysUntil} days`;
-}
+// Save / Update class
+els.addClass.addEventListener("click", async () => {
+  const name = els.classInput.value.trim();
+  const meetingLink = normalizeMeetingLink(els.meetingLink.value);
+  const meetingType = els.meetingType.value;
+  const classTime = els.classTime.value;
+  const days = getSelectedDays();
 
-// Save Class
-els.addClassBtn.addEventListener("click", async () => {
-  const title = els.classInput.value.trim();
-  const link = els.meetingLink.value.trim();
-  const type = els.meetingType.value;
-  const time = els.classTime.value;
-
-  if (!title || selectedClassDays.length === 0) {
-    setStatus("Please enter a subject name and select at least one day.", "error");
-    setTimeout(() => setStatus(""), 2500);
+  if (!name || days.length === 0 || !meetingLink) {
+    setStatus("Please enter a subject name, a meeting link, and select at least one day.", "error");
+    setTimeout(() => setStatus(""), 2800);
     return;
   }
 
-  const newClass = {
-    id: 'class-' + Date.now(),
-    title,
-    link,
-    type,
-    days: [...selectedClassDays],
-    time
-  };
+  const editId = els.addClass.dataset.editId;
+  const { classes } = await chrome.storage.local.get(["classes"]);
+  const list = classes || [];
 
-  const { myClasses = [] } = await chrome.storage.local.get("myClasses");
-  myClasses.push(newClass);
-  await chrome.storage.local.set({ myClasses });
-  
-  setStatus("Class added successfully!", "success");
+  if (editId) {
+    const idx = list.findIndex(c => c.id === editId);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], name, meetingLink, meetingType, classTime, days };
+    }
+  } else {
+    list.push({
+      id: 'class-' + Date.now(),
+      name,
+      meetingLink,
+      meetingType,
+      classTime,
+      days
+    });
+  }
+
+  await chrome.storage.local.set({ classes: list });
+  setStatus(editId ? "Class updated!" : "Class added!", "success");
   setTimeout(() => setStatus(""), 2000);
-  
   resetClassForm();
-  renderClasses(myClasses);
+  await renderClasses();
 });
 
-function renderClasses(classesArr) {
+async function renderClasses() {
+  const { classes } = await chrome.storage.local.get(["classes"]);
+  const classList = (classes || []).slice();
+
   els.classList.innerHTML = "";
-  if (!classesArr || classesArr.length === 0) {
+
+  if (classList.length === 0) {
     els.emptyClasses.classList.remove("hidden");
-    els.classesSectionHeader.classList.add("hidden");
+    if (els.classesSectionHeader) els.classesSectionHeader.classList.add("hidden");
     return;
   }
-  
   els.emptyClasses.classList.add("hidden");
-  els.classesSectionHeader.classList.remove("hidden");
+  if (els.classesSectionHeader) els.classesSectionHeader.classList.remove("hidden");
+
+  const now = new Date();
+  classList.forEach(c => { c._nextDate = getNextClassDate(c, now); });
+  classList.sort((a, b) => {
+    if (!a._nextDate && !b._nextDate) return 0;
+    if (!a._nextDate) return 1;
+    if (!b._nextDate) return -1;
+    return a._nextDate - b._nextDate;
+  });
+
+  const videoIcon = `<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
 
   const fragment = document.createDocumentFragment();
+  for (const cls of classList) {
+    const card = document.createElement("div");
+    card.className = "class-card";
 
-  classesArr.forEach(c => {
-    const div = document.createElement("div");
-    div.className = "class-card";
+    const meetingType = cls.meetingType || "other";
+    const meetingLabel = MEETING_LABELS[meetingType] || "Other Link";
+    const hasLink = !!cls.meetingLink;
+    const startsIn = formatStartsIn(cls._nextDate, now);
+    const status = getClassStatus(cls._nextDate, now);
 
-    const startsInText = getDaysUntilNextClass(c.days);
-    const linkStatus = c.link ? "Meeting Link Saved" : "No link added";
-    
-    // Convert 24hr time to 12hr for display if time exists
-    let displayTime = "";
-    if (c.time) {
-      let [hours, minutes] = c.time.split(":");
-      let period = "AM";
-      hours = parseInt(hours, 10);
-      if (hours >= 12) {
-        period = "PM";
-        if (hours > 12) hours -= 12;
-      }
-      if (hours === 0) hours = 12;
-      displayTime = ` at ${hours}:${minutes} ${period}`;
-    }
+    const daysDisplay = (cls.days && cls.days.length)
+      ? cls.days.map(d => DAY_LABELS[d]).filter(Boolean).join(", ")
+      : "";
+    const scheduleFallbackParts = [daysDisplay, cls.classTime].filter(Boolean);
+    const scheduleFallback = scheduleFallbackParts.length ? scheduleFallbackParts.join(" · ") : "No schedule set";
+    const timeText = startsIn || scheduleFallback;
 
-    div.innerHTML = `
+    const statusBadgeHtml = status
+      ? `<span class="class-status-badge ${status.className}">${status.label}</span>`
+      : "";
+
+    const linkPillHtml = hasLink
+      ? `<span class="link-pill saved">Link Saved</span>`
+      : `<span class="link-pill missing">Missing Link</span>`;
+
+    const actionsHtml = hasLink
+      ? `<button class="class-action-btn primary-action btn-join" data-id="${cls.id}">${videoIcon}<span>Join Class</span></button>
+         <button class="class-action-btn btn-edit" data-id="${cls.id}">Edit Link</button>
+         <button class="class-action-btn btn-remind" data-id="${cls.id}">Remind Me</button>`
+      : `<button class="class-action-btn primary-action wide btn-edit" data-id="${cls.id}">Add Link</button>
+         <button class="class-action-btn btn-remind" data-id="${cls.id}">Remind Me</button>`;
+
+    card.innerHTML = `
       <div class="class-card-header">
-        <h3 class="class-title">${c.title}</h3>
-        <button class="dismiss-btn" data-id="${c.id}" title="Remove Class">&#10005;</button>
+        <h3 class="class-card-title">${escapeHtml(cls.name)}</h3>
+        <div class="class-card-header-right">
+          ${statusBadgeHtml}
+          <button class="class-card-delete" data-id="${cls.id}" title="Delete">✕</button>
+        </div>
       </div>
-      <p class="class-time">${startsInText}${displayTime}</p>
-      <p class="class-link-status">${linkStatus}</p>
-      <div class="class-actions">
-        <button class="class-action-btn join-btn" data-link="${c.link}">
-          <span class="icon">&#128249;</span> Join Class
-        </button>
+      <p class="class-card-time">${escapeHtml(timeText)}</p>
+      <div class="class-card-pills">
+        <span class="meeting-pill ${escapeHtml(meetingType)}">${escapeHtml(meetingLabel)}</span>
+        ${linkPillHtml}
+      </div>
+      <div class="class-card-actions">
+        ${actionsHtml}
       </div>
     `;
 
-    // Handle Join
-    const joinBtn = div.querySelector('.join-btn');
-    joinBtn.addEventListener('click', () => {
-      if (c.link) {
-        chrome.tabs.create({ url: c.link });
-      } else {
-        setStatus("No meeting link saved for this class.", "error");
-        setTimeout(() => setStatus(""), 2000);
-      }
-    });
+    fragment.appendChild(card);
+  }
+  els.classList.appendChild(fragment);
 
-    // Handle Delete
-    const deleteBtn = div.querySelector('.dismiss-btn');
-    deleteBtn.addEventListener('click', async () => {
-      const { myClasses = [] } = await chrome.storage.local.get("myClasses");
-      const updatedClasses = myClasses.filter(item => item.id !== c.id);
-      await chrome.storage.local.set({ myClasses: updatedClasses });
-      renderClasses(updatedClasses);
-      setStatus("Class removed.", "success");
+  els.classList.querySelectorAll(".class-card-delete").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const { classes } = await chrome.storage.local.get(["classes"]);
+      const updated = (classes || []).filter(c => c.id !== id);
+      await chrome.storage.local.set({ classes: updated });
+      await renderClasses();
+      setStatus("Class deleted!", "success");
       setTimeout(() => setStatus(""), 2000);
     });
-
-    fragment.appendChild(div);
   });
 
-  els.classList.appendChild(fragment);
+  els.classList.querySelectorAll(".btn-join").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const { classes } = await chrome.storage.local.get(["classes"]);
+      const cls = (classes || []).find(c => c.id === id);
+      const url = normalizeMeetingLink(cls && cls.meetingLink);
+      if (url) chrome.tabs.create({ url });
+    });
+  });
+
+  els.classList.querySelectorAll(".btn-edit").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const { classes } = await chrome.storage.local.get(["classes"]);
+      const cls = (classes || []).find(c => c.id === id);
+      if (cls) {
+        showClassForm();
+        els.classInput.value = cls.name;
+        els.meetingLink.value = cls.meetingLink || "";
+        els.meetingType.value = cls.meetingType || "google-meet";
+        els.classTime.value = cls.classTime || "";
+        setSelectedDays(cls.days || []);
+        els.addClass.dataset.editId = id;
+        els.addClass.textContent = "Update Class";
+      }
+    });
+  });
+
+  els.classList.querySelectorAll(".btn-remind").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const { classes } = await chrome.storage.local.get(["classes"]);
+      const cls = (classes || []).find(c => c.id === id);
+      if (!cls) return;
+      const next = getNextClassDate(cls, new Date());
+      if (!next) {
+        setStatus("Set days and a time first to schedule a reminder.", "error");
+        setTimeout(() => setStatus(""), 2500);
+        return;
+      }
+      const remindAt = next.getTime() - 15 * 60 * 1000;
+      if (remindAt <= Date.now()) {
+        setStatus("Class is too soon to set a reminder.", "error");
+        setTimeout(() => setStatus(""), 2500);
+        return;
+      }
+      chrome.alarms.create(`class_${cls.id}`, { when: remindAt });
+      setStatus(`Reminder set for ${new Date(remindAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}`, "success");
+      setTimeout(() => setStatus(""), 3000);
+    });
+  });
 }
 
-// Ensure classes are loaded on startup
 async function renderFromStorage() {
-  const { deadlines, notifications, myClasses } = await chrome.storage.local.get(["deadlines", "notifications", "myClasses"]);
+  const { deadlines, notifications } = await chrome.storage.local.get(["deadlines", "notifications"]);
   renderDeadlines(deadlines || []);
   updateSummaryCounts(deadlines || []);
   renderNotifications(notifications || []);
-  renderClasses(myClasses || []);
+  await renderClasses();
 }
 
 // --- TAB SWITCHING ---

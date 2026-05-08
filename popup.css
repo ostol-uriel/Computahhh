@@ -631,6 +631,10 @@ reminder-menu button:hover {
 }
 
 /* Classes Tab Styles */
+#addClassToggle {
+  margin-bottom: 12px;
+}
+
 .classes-input-container {
   display: flex;
   flex-direction: column;
@@ -640,6 +644,53 @@ reminder-menu button:hover {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.days-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 4px 0 -2px 0;
+}
+
+.days-picker {
+  display: flex;
+  gap: 6px;
+}
+
+.day-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.day-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.day-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.class-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.class-form-actions button {
+  flex: 1;
 }
 
 .class-input {
@@ -658,113 +709,203 @@ reminder-menu button:hover {
   background: var(--surface);
 }
 
+.classes-section-header {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 8px 0 12px 0;
+  letter-spacing: -0.01em;
+}
+
 .classes-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.class-item {
+.class-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 4px solid var(--primary);
-  border-radius: 10px;
-  padding: 12px;
+  border-radius: 12px;
+  padding: 16px;
   box-shadow: var(--shadow);
-  transition: all 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
 
-.class-item:hover {
-  box-shadow: 0 2px 8px rgba(59, 91, 219, 0.12);
+.class-card:hover {
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
 }
 
-.class-header {
+.class-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
-.class-name {
-  font-weight: 600;
-  font-size: 15px;
+.class-card-title {
+  font-size: 16px;
+  font-weight: 700;
   margin: 0;
+  line-height: 1.3;
   color: var(--text);
+  flex: 1;
+  word-break: break-word;
 }
 
-.delete-class-btn {
+.class-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.class-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.class-status-badge.starting-soon {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.class-status-badge.in-progress {
+  background: #fff3bf;
+  color: #b27d00;
+}
+
+.class-card-delete {
   background: transparent;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 18px;
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
   padding: 0;
-  width: 24px;
-  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
-.delete-class-btn:hover {
+.class-card:hover .class-card-delete {
+  opacity: 0.6;
+}
+
+.class-card-delete:hover {
+  opacity: 1 !important;
   color: #e03131;
+  background: #fff5f5;
 }
 
-.class-time {
-  font-size: 12px;
+.class-card-time {
+  font-size: 13px;
   color: var(--text-muted);
-  margin: 0 0 8px 0;
+  margin: 0 0 12px 0;
 }
 
-.class-actions {
+.class-card-pills {
   display: flex;
   gap: 6px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
 }
 
-.class-link-btn,
-.edit-class-btn,
-.remind-class-btn {
+.meeting-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: #fff;
+}
+
+.meeting-pill.google-meet {
+  background: #2f9e44;
+}
+
+.meeting-pill.zoom {
+  background: #3b5bdb;
+}
+
+.meeting-pill.teams {
+  background: #845ef7;
+}
+
+.meeting-pill.other {
+  background: #868e96;
+}
+
+.link-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+
+.link-pill.saved {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.link-pill.missing {
+  background: #ffe3e3;
+  color: #c92a2a;
+}
+
+.class-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.class-action-btn {
   flex: 1;
-  min-width: 70px;
-  padding: 8px 10px;
+  min-width: 0;
+  padding: 11px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  text-decoration: none;
-  display: inline-block;
-  text-align: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
-.class-link-btn {
-  background: #0078d4;
-  color: #fff;
-  border-color: #0078d4;
-}
-
-.class-link-btn:hover {
-  background: #005a9e;
-  border-color: #005a9e;
-}
-
-.edit-class-btn:hover {
+.class-action-btn:hover {
   border-color: var(--primary);
   color: var(--primary);
 }
 
-.remind-class-btn:hover {
-  border-color: #f08c00;
-  color: #f08c00;
+.class-action-btn.primary-action {
+  background: #519b4c;
+  border-color: #519b4c;
+  color: #fff;
 }
 
-.no-link {
-  color: var(--text-muted);
-  font-size: 12px;
+.class-action-btn.primary-action:hover {
+  background: #43833f;
+  border-color: #43833f;
+  color: #fff;
+}
+
+.class-action-btn.primary-action.wide {
+  flex: 2;
+}
+
+.class-action-btn .icon {
+  flex-shrink: 0;
 }
 /* =========================
    UI POLISH UPGRADE
@@ -772,21 +913,18 @@ reminder-menu button:hover {
 
 /* Smooth hover for all cards */
 .deadline-item,
-.class-item,
 .announcement-item {
   transition: all 0.18s ease;
 }
 
 .deadline-item:hover,
-.class-item:hover,
 .announcement-item:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
 }
 
 /* Softer modern card look */
-.deadline-item,
-.class-item {
+.deadline-item {
   border-radius: 14px;
 }
 
@@ -846,65 +984,6 @@ reminder-menu button:hover {
 .platform-other {
   background: #f1f3f5;
   color: #495057;
-}
-
-/* =========================
-   CLASS CARD IMPROVEMENTS
-========================= */
-.class-item {
-  padding: 14px;
-  border-left: 4px solid var(--primary);
-}
-
-.class-header {
-  align-items: center;
-}
-
-/* Add spacing between badge + title */
-.class-header .status-pill {
-  margin-left: 8px;
-}
-
-/* Class info row */
-.class-meta {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-/* =========================
-   BUTTON UPGRADE
-========================= */
-.class-link-btn {
-  background: #2f9e44;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px;
-  font-weight: 600;
-}
-
-.class-link-btn:hover {
-  background: #27842c;
-}
-
-/* Secondary buttons */
-.edit-class-btn,
-.remind-class-btn {
-  background: #f1f3f5;
-  border: none;
-  border-radius: 8px;
-  padding: 10px;
-}
-
-.edit-class-btn:hover {
-  background: #e9ecef;
-}
-
-.remind-class-btn:hover {
-  background: #fff4e6;
-  color: #f08c00;
 }
 
 /* =========================
@@ -988,310 +1067,4 @@ reminder-menu button:hover {
 .app-header .icon-btn:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: rotate(45deg); /* Fun little spin effect on hover */
-}
-/* --- CLASSES TAB THEME --- */
-.classes-input-container {
-  background: #f4f5f7;
-  padding: 16px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  border: 1px solid #eaeaea;
-}
-
-.class-input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
-.class-input:focus {
-  outline: none;
-  border-color: #4a2380;
-  box-shadow: 0 0 0 2px rgba(74, 35, 128, 0.2);
-}
-
-.days-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: -6px;
-}
-
-.days-picker {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.day-btn {
-  flex: 1;
-  padding: 8px 4px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  color: #374151;
-  transition: all 0.2s ease;
-}
-
-.day-btn:hover {
-  background: #f9fafb;
-}
-
-.day-btn.active {
-  background: #4a2380;
-  color: white;
-  border-color: #4a2380;
-}
-
-.class-form-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.classes-section-header {
-  font-size: 16px;
-  font-weight: 800;
-  color: #111827;
-  margin: 20px 0 12px 0;
-}
-
-/* Class Card Styles */
-.class-card {
-  background: #ffffff;
-  border: 1px solid #eaeaea;
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-  margin-bottom: 12px;
-}
-
-.class-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
-}
-
-.class-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #003366;
-  margin: 0;
-}
-
-.dismiss-btn {
-  background: #f4f5f7;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 10px;
-  cursor: pointer;
-  color: #333;
-  font-size: 12px;
-  transition: background 0.2s;
-}
-
-.dismiss-btn:hover {
-  background: #e1e3e8;
-  color: #d32f2f;
-}
-
-.class-time {
-  font-size: 13px;
-  color: #374151;
-  margin: 0 0 8px 0;
-  font-weight: 500;
-}
-
-.class-link-status {
-  font-size: 12px;
-  color: #4b5563;
-  margin: 0 0 12px 0;
-}
-
-.class-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.class-action-btn {
-  background: #f4f5f7;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #111827;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: background 0.2s;
-}
-
-.class-action-btn:hover {
-  background: #e5e7eb;
-}
-/* --- CLASSES TAB THEME --- */
-.classes-input-container {
-  background: #f4f5f7;
-  padding: 16px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  border: 1px solid #eaeaea;
-}
-
-.class-input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
-.class-input:focus {
-  outline: none;
-  border-color: #4a2380;
-  box-shadow: 0 0 0 2px rgba(74, 35, 128, 0.2);
-}
-
-.days-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: -6px;
-}
-
-.days-picker {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.day-btn {
-  flex: 1;
-  padding: 8px 4px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  color: #374151;
-  transition: all 0.2s ease;
-}
-
-.day-btn:hover {
-  background: #f9fafb;
-}
-
-.day-btn.active {
-  background: #4a2380;
-  color: white;
-  border-color: #4a2380;
-}
-
-.class-form-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.classes-section-header {
-  font-size: 16px;
-  font-weight: 800;
-  color: #111827;
-  margin: 20px 0 12px 0;
-}
-
-/* Class Card Styles */
-.class-card {
-  background: #ffffff;
-  border: 1px solid #eaeaea;
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-  margin-bottom: 12px;
-}
-
-.class-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
-}
-
-.class-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #003366;
-  margin: 0;
-}
-
-.dismiss-btn {
-  background: #f4f5f7;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 10px;
-  cursor: pointer;
-  color: #333;
-  font-size: 12px;
-  transition: background 0.2s;
-}
-
-.dismiss-btn:hover {
-  background: #e1e3e8;
-  color: #d32f2f;
-}
-
-.class-time {
-  font-size: 13px;
-  color: #374151;
-  margin: 0 0 8px 0;
-  font-weight: 500;
-}
-
-.class-link-status {
-  font-size: 12px;
-  color: #4b5563;
-  margin: 0 0 12px 0;
-}
-
-.class-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.class-action-btn {
-  background: #f4f5f7;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #111827;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: background 0.2s;
-}
-
-.class-action-btn:hover {
-  background: #e5e7eb;
 }
