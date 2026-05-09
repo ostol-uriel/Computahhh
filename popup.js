@@ -16,8 +16,10 @@ const els = {
   page1: document.getElementById("page1"),
   page2: document.getElementById("page2"),
   page3: document.getElementById("page3"),
-  notificationsList: document.getElementById("announcementsList"), 
+  notificationsList: document.getElementById("announcementsList"),
   emptyNotifications: document.getElementById("emptyAnnouncements"),
+  notificationsToolbar: document.getElementById("notificationsToolbar"),
+  markAllRead: document.getElementById("markAllRead"),
   dueTodayCount: document.getElementById("dueTodayCount"),
   dueWeekCount: document.getElementById("dueWeekCount"),
   overdueCount: document.getElementById("overdueCount"),
@@ -217,7 +219,7 @@ async function clearSettings() {
   els.apiToken.value = "";
   els.lastSync.textContent = "";
   renderDeadlines([]);
-  renderNotifications([]);
+  await renderNotifications([]);
   await renderClasses();
   setStatus("Cleared saved settings and data.", "success");
   setTimeout(() => setStatus(""), 1800);
@@ -247,29 +249,44 @@ async function fetchAssignmentDetails(baseUrl, token, courseId, assignmentId) {
   }
 }
 
+async function fetchUserSubmission(baseUrl, token, courseId, assignmentId) {
+  try {
+    const submission = await canvasFetch(baseUrl, token, `/courses/${courseId}/assignments/${assignmentId}/submissions/self`);
+    return {
+      submitted: !!submission.submitted_at,
+      workflowState: submission.workflow_state || "unsubmitted",
+    };
+  } catch (err) {
+    return { submitted: false, workflowState: "unsubmitted" };
+  }
+}
+
 async function fetchAnnouncements(baseUrl, token) {
   try {
     const courses = await canvasFetch(baseUrl, token, "/courses?enrollment_state=active");
-    const announcementsLists = await Promise.all(
-      courses.map(async (course) => {
-        try {
-          const items = await canvasFetch(baseUrl, token, `/courses/${course.id}/announcements`);
-          return items.map((ann) => ({
-            id: ann.id, 
-            type: "announcement",
-            courseId: course.id, 
-            courseName: course.name || course.course_code || "Course",
-            title: ann.title, 
-            message: ann.message, 
-            postedAt: ann.posted_at || ann.created_at, 
-            htmlUrl: ann.html_url,
-          }));
-        } catch (e) {
-          return [];
-        }
-      })
+    if (!courses.length) return [];
+
+    const courseMap = new Map(courses.map(c => [c.id, c.name || c.course_code || "Course"]));
+    const contextParams = courses.map(c => `context_codes%5B%5D=course_${c.id}`).join("&");
+    const startDate = new Date(Date.now() - 7 * DAY_MS).toISOString();
+    const items = await canvasFetch(
+      baseUrl, token,
+      `/announcements?${contextParams}&start_date=${encodeURIComponent(startDate)}&active_only=true`
     );
-    return announcementsLists.flat();
+
+    return items.map((ann) => {
+      const courseId = parseInt(String(ann.context_code || "").replace("course_", ""), 10);
+      return {
+        id: ann.id,
+        type: "announcement",
+        courseId,
+        courseName: courseMap.get(courseId) || "Course",
+        title: ann.title,
+        message: ann.message,
+        postedAt: ann.posted_at || ann.created_at,
+        htmlUrl: ann.html_url,
+      };
+    });
   } catch (e) {
     return [];
   }
@@ -310,12 +327,16 @@ async function fetchDeadlines() {
         try {
           const items = await canvasFetch(canvasUrl, apiToken, `/courses/${course.id}/assignments?bucket=upcoming&order_by=due_at`);
           return await Promise.all(items.map(async (a) => {
-            const details = await fetchAssignmentDetails(canvasUrl, apiToken, course.id, a.id);
+            const [details, submission] = await Promise.all([
+              fetchAssignmentDetails(canvasUrl, apiToken, course.id, a.id),
+              fetchUserSubmission(canvasUrl, apiToken, course.id, a.id),
+            ]);
             return {
               id: a.id, courseId: course.id, courseName: course.name || course.course_code || "Course",
               title: a.name, dueAt: a.due_at, htmlUrl: a.html_url,
               prerequisites: details.prerequisites, description: details.description,
               locked: details.locked, lockExplanation: details.lockExplanation,
+              submitted: submission.submitted, workflowState: submission.workflowState,
             };
           }));
         } catch { return []; }
@@ -326,20 +347,20 @@ async function fetchDeadlines() {
     const deadlines = assignmentsLists.flat().filter((a) => a.dueAt && new Date(a.dueAt).getTime() >= now - 7 * DAY_MS)
       .sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
 
-    if (oldDeadlines && Array.isArray(oldDeadlines)) {
-      const doneSet = new Set(oldDeadlines.filter(d => d.isDone).map(d => d.id));
-      deadlines.forEach(d => {
-        if (doneSet.has(d.id)) {
-          d.isDone = true;
-        }
-      });
-    }
+    const doneSet = oldDeadlines && Array.isArray(oldDeadlines)
+      ? new Set(oldDeadlines.filter(d => d.isDone).map(d => d.id))
+      : new Set();
+    deadlines.forEach(d => {
+      if (doneSet.has(d.id) || d.submitted) {
+        d.isDone = true;
+      }
+    });
 
     const announcements = await fetchAnnouncements(canvasUrl, apiToken);
     const inbox = await fetchInbox(canvasUrl, apiToken);
     
     const notifications = [...announcements, ...inbox]
-      .filter((n) => n.postedAt && new Date(n.postedAt).getTime() >= now - 180 * DAY_MS)
+      .filter((n) => n.postedAt && new Date(n.postedAt).getTime() >= now - 7 * DAY_MS)
       .sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
 
     const lastSyncAt = new Date().toISOString();
@@ -349,7 +370,7 @@ async function fetchDeadlines() {
 
     renderDeadlines(deadlines);
     updateSummaryCounts(deadlines);
-    renderNotifications(notifications);
+    await loadAndRenderNotifications();
     
     setStatus(`Synced ${deadlines.length} deadlines.`, "success");
     setTimeout(() => setStatus(""), 2200);
@@ -382,11 +403,11 @@ function renderDeadlines(deadlines, filter = "all") {
     return;
   }
 
-  const sections = { overdue: [], today: [], week: [], later: [] };
+  const sections = { overdue: [], urgent: [], today: [], week: [], later: [] };
   for (const d of filtered) sections[getTimeCategory(new Date(d.dueAt).getTime(), now)].push(d);
 
   const fragment = document.createDocumentFragment();
-  const sectionLabels = { overdue: "OVERDUE", today: "TODAY", week: "THIS WEEK", later: "LATER" };
+  const sectionLabels = { overdue: "OVERDUE", urgent: "URGENT", today: "TODAY", week: "THIS WEEK", later: "LATER" };
 
   for (const [key, items] of Object.entries(sections)) {
     if (items.length === 0) continue;
@@ -654,28 +675,66 @@ function renderDeadlines(deadlines, filter = "all") {
   els.deadlineList.appendChild(fragment);
 }
 
-function renderNotifications(notifications) {
+const NOTIF_ICONS = {
+  inbox: "✉️",
+  announcement: "📢",
+  reminder: "🔔",
+  "deadline-tier": "📌",
+  overdue: "❌",
+  "class-reminder": "📚",
+  "class-start": "🎓",
+};
+
+async function loadAndRenderNotifications() {
+  const { notifications = [], appNotifications = [] } = await chrome.storage.local.get(["notifications", "appNotifications"]);
+  const cutoff = Date.now() - 7 * DAY_MS;
+  const merged = [...appNotifications, ...notifications]
+    .filter(n => n.postedAt && new Date(n.postedAt).getTime() >= cutoff)
+    .sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
+  await renderNotifications(merged);
+}
+
+async function renderNotifications(notifications) {
   els.notificationsList.innerHTML = "";
-  if (!notifications || notifications.length === 0) {
+
+  const { dismissedNotifications = [] } = await chrome.storage.local.get(["dismissedNotifications"]);
+  const dismissedSet = new Set(dismissedNotifications);
+  const visible = (notifications || []).filter(n => !dismissedSet.has(`${n.type}:${n.id}`));
+
+  if (visible.length === 0) {
     els.emptyNotifications.classList.remove("hidden");
-    els.emptyNotifications.innerHTML = "No recent notifications in the last 6 months.";
+    els.emptyNotifications.innerHTML = "No notifications this week.";
+    els.notificationsToolbar.classList.add("hidden");
     return;
   }
   els.emptyNotifications.classList.add("hidden");
+  els.notificationsToolbar.classList.remove("hidden");
 
   const fragment = document.createDocumentFragment();
-  for (const item of notifications) {
+  for (const item of visible) {
     const div = document.createElement("div");
     div.className = "announcement-item";
-    
-    const icon = item.type === "inbox" ? "✉️" : "📢";
+
+    const icon = NOTIF_ICONS[item.type] || "🔔";
+    const key = `${item.type}:${item.id}`;
 
     div.innerHTML = `
-      <p class="announcement-title">${icon} ${item.title}</p>
-      <p class="announcement-course">${item.courseName}</p>
+      <button class="announcement-dismiss" title="Dismiss" aria-label="Dismiss">✕</button>
+      <p class="announcement-title">${icon} ${escapeHtml(item.title)}</p>
+      <p class="announcement-course">${escapeHtml(item.courseName || "")}</p>
       <p class="announcement-date">${formatDueDate(item.postedAt)}</p>
     `;
     div.addEventListener("click", () => { if (item.htmlUrl) chrome.tabs.create({ url: item.htmlUrl }); });
+
+    const dismissBtn = div.querySelector(".announcement-dismiss");
+    dismissBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const { dismissedNotifications: current = [] } = await chrome.storage.local.get(["dismissedNotifications"]);
+      if (!current.includes(key)) current.push(key);
+      await chrome.storage.local.set({ dismissedNotifications: current });
+      await loadAndRenderNotifications();
+    });
+
     fragment.appendChild(div);
   }
   els.notificationsList.appendChild(fragment);
@@ -767,6 +826,7 @@ els.addClass.addEventListener("click", async () => {
   }
 
   await chrome.storage.local.set({ classes: list });
+  chrome.runtime.sendMessage({ type: "classes-updated" });
   setStatus(editId ? "Class updated!" : "Class added!", "success");
   setTimeout(() => setStatus(""), 2000);
   resetClassForm();
@@ -860,6 +920,7 @@ async function renderClasses() {
       const { classes } = await chrome.storage.local.get(["classes"]);
       const updated = (classes || []).filter(c => c.id !== id);
       await chrome.storage.local.set({ classes: updated });
+      chrome.runtime.sendMessage({ type: "classes-updated" });
       await renderClasses();
       setStatus("Class deleted!", "success");
       setTimeout(() => setStatus(""), 2000);
@@ -920,10 +981,10 @@ async function renderClasses() {
 }
 
 async function renderFromStorage() {
-  const { deadlines, notifications } = await chrome.storage.local.get(["deadlines", "notifications"]);
+  const { deadlines } = await chrome.storage.local.get(["deadlines"]);
   renderDeadlines(deadlines || []);
   updateSummaryCounts(deadlines || []);
-  renderNotifications(notifications || []);
+  await loadAndRenderNotifications();
   await renderClasses();
 }
 
@@ -962,6 +1023,29 @@ els.saveSettings.addEventListener("click", saveSettings);
 els.clearSettings.addEventListener("click", clearSettings);
 els.syncBtn.addEventListener("click", fetchDeadlines);
 
+els.markAllRead.addEventListener("click", async () => {
+  const { notifications = [], appNotifications = [], dismissedNotifications = [] } =
+    await chrome.storage.local.get(["notifications", "appNotifications", "dismissedNotifications"]);
+  const dismissedSet = new Set(dismissedNotifications);
+  let added = 0;
+  for (const n of [...appNotifications, ...notifications]) {
+    const key = `${n.type}:${n.id}`;
+    if (!dismissedSet.has(key)) {
+      dismissedSet.add(key);
+      added++;
+    }
+  }
+  if (added === 0) {
+    setStatus("No new notifications to mark.", "info");
+    setTimeout(() => setStatus(""), 1800);
+    return;
+  }
+  await chrome.storage.local.set({ dismissedNotifications: Array.from(dismissedSet) });
+  await loadAndRenderNotifications();
+  setStatus(`Marked ${added} as read.`, "success");
+  setTimeout(() => setStatus(""), 1800);
+});
+
 els.tab1Btn.addEventListener("click", () => switchTab(1));
 els.tab2Btn.addEventListener("click", () => switchTab(2));
 els.tab3Btn.addEventListener("click", () => switchTab(3));
@@ -973,6 +1057,13 @@ document.querySelectorAll(".filter-btn").forEach((btn) => {
     const { deadlines } = await chrome.storage.local.get(["deadlines"]);
     renderDeadlines(deadlines || [], e.target.dataset.filter);
   });
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes.appNotifications || changes.notifications || changes.dismissedNotifications) {
+    loadAndRenderNotifications();
+  }
 });
 
 (async function init() {
