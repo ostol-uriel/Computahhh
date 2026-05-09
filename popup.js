@@ -685,16 +685,32 @@ const NOTIF_ICONS = {
   "class-start": "🎓",
 };
 
+let notificationsRenderRunning = false;
+let notificationsRenderPending = false;
+
 async function loadAndRenderNotifications() {
-  const { notifications = [], appNotifications = [] } = await chrome.storage.local.get(["notifications", "appNotifications"]);
-  const cutoff = Date.now() - 7 * DAY_MS;
-  const merged = [...appNotifications, ...notifications]
-    .filter(n => n.postedAt && new Date(n.postedAt).getTime() >= cutoff)
-    .sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
-  await renderNotifications(merged);
+  if (notificationsRenderRunning) {
+    notificationsRenderPending = true;
+    return;
+  }
+  notificationsRenderRunning = true;
+  try {
+    do {
+      notificationsRenderPending = false;
+      const { notifications = [], appNotifications = [] } = await chrome.storage.local.get(["notifications", "appNotifications"]);
+      const cutoff = Date.now() - 7 * DAY_MS;
+      const merged = [...appNotifications, ...notifications]
+        .filter(n => n.postedAt && new Date(n.postedAt).getTime() >= cutoff)
+        .sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
+      await renderNotifications(merged);
+    } while (notificationsRenderPending);
+  } finally {
+    notificationsRenderRunning = false;
+  }
 }
 
 async function renderNotifications(notifications) {
+  const prevScrollY = window.scrollY;
   els.notificationsList.innerHTML = "";
 
   const { dismissedNotifications = [] } = await chrome.storage.local.get(["dismissedNotifications"]);
@@ -732,12 +748,12 @@ async function renderNotifications(notifications) {
       const { dismissedNotifications: current = [] } = await chrome.storage.local.get(["dismissedNotifications"]);
       if (!current.includes(key)) current.push(key);
       await chrome.storage.local.set({ dismissedNotifications: current });
-      await loadAndRenderNotifications();
     });
 
     fragment.appendChild(div);
   }
   els.notificationsList.appendChild(fragment);
+  window.scrollTo(0, prevScrollY);
 }
 
 /* --- CLASSES LOGIC --- */
