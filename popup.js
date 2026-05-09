@@ -28,6 +28,7 @@ const els = {
   meetingLink: document.getElementById("meetingLink"),
   meetingType: document.getElementById("meetingType"),
   classTime: document.getElementById("classTime"),
+  classEndTime: document.getElementById("classEndTime"),
   addClass: document.getElementById("addClass"),
   classList: document.getElementById("classList"),
   emptyClasses: document.getElementById("emptyClasses"),
@@ -98,9 +99,40 @@ function formatStartsIn(date, now = new Date()) {
 function getClassStatus(date, now = new Date()) {
   if (!date) return null;
   const diff = date.getTime() - now.getTime();
-  if (diff <= 0 && diff > -30 * 60000) return { label: "In Progress", className: "in-progress" };
+  if (diff <= 0 && diff > -30 * 60000) return { label: "Ongoing", className: "in-progress" };
   if (diff > 0 && diff <= 30 * 60000) return { label: "Starting Soon", className: "starting-soon" };
   return null;
+}
+
+function getOngoingClass(cls, now = new Date()) {
+  if (!cls.days || !cls.days.length || !cls.classTime || !cls.endTime) return null;
+  const [sh, sm] = cls.classTime.split(":").map(Number);
+  const [eh, em] = cls.endTime.split(":").map(Number);
+  if ([sh, sm, eh, em].some(Number.isNaN)) return null;
+
+  const todayKey = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][now.getDay()];
+  if (!cls.days.includes(todayKey)) return null;
+
+  const start = new Date(now);
+  start.setHours(sh, sm, 0, 0);
+  const end = new Date(now);
+  end.setHours(eh, em, 0, 0);
+  if (end <= start) end.setDate(end.getDate() + 1);
+
+  if (now >= start && now < end) return { start, end };
+  return null;
+}
+
+function formatEndsIn(endDate, now = new Date()) {
+  const diff = endDate.getTime() - now.getTime();
+  if (diff <= 0) return null;
+  const min = Math.round(diff / 60000);
+  if (min < 60) return `Ends in ${min} minute${min === 1 ? "" : "s"}`;
+  const hr = Math.floor(diff / 3600000);
+  const remMin = Math.round((diff % 3600000) / 60000);
+  return remMin === 0
+    ? `Ends in ${hr} hour${hr === 1 ? "" : "s"}`
+    : `Ends in ${hr}h ${remMin}m`;
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -801,6 +833,7 @@ function resetClassForm() {
   els.meetingLink.value = "";
   els.meetingType.value = "google-meet";
   els.classTime.value = "";
+  els.classEndTime.value = "";
   setSelectedDays([]);
   els.addClass.dataset.editId = "";
   els.addClass.textContent = "Save Class";
@@ -813,6 +846,7 @@ els.addClass.addEventListener("click", async () => {
   const meetingLink = normalizeMeetingLink(els.meetingLink.value);
   const meetingType = els.meetingType.value;
   const classTime = els.classTime.value;
+  const endTime = els.classEndTime.value || null;
   const days = getSelectedDays();
 
   if (!name || days.length === 0 || !meetingLink) {
@@ -828,7 +862,7 @@ els.addClass.addEventListener("click", async () => {
   if (editId) {
     const idx = list.findIndex(c => c.id === editId);
     if (idx !== -1) {
-      list[idx] = { ...list[idx], name, meetingLink, meetingType, classTime, days };
+      list[idx] = { ...list[idx], name, meetingLink, meetingType, classTime, endTime, days };
     }
   } else {
     list.push({
@@ -837,6 +871,7 @@ els.addClass.addEventListener("click", async () => {
       meetingLink,
       meetingType,
       classTime,
+      endTime,
       days
     });
   }
@@ -848,6 +883,45 @@ els.addClass.addEventListener("click", async () => {
   resetClassForm();
   await renderClasses();
 });
+
+let editingClassId = null;
+
+function buildInlineEditFormHtml(cls) {
+  const dayKeys = ["mon", "tue", "wed", "thu", "fri", "sat"];
+  const labels = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat" };
+  const active = new Set(cls.days || []);
+  const dayBtns = dayKeys.map(k =>
+    `<button type="button" class="day-btn inline-day-btn ${active.has(k) ? "active" : ""}" data-day="${k}">${labels[k]}</button>`
+  ).join("");
+  const sel = (v) => cls.meetingType === v ? "selected" : "";
+
+  return `
+    <div class="class-card-edit">
+      <input type="text" class="class-input edit-name" value="${escapeHtml(cls.name || "")}" placeholder="Subject name">
+      <input type="url" class="class-input edit-link" value="${escapeHtml(cls.meetingLink || "")}" placeholder="Meeting link">
+      <select class="class-input edit-type">
+        <option value="google-meet" ${sel("google-meet")}>Google Meet</option>
+        <option value="zoom" ${sel("zoom")}>Zoom</option>
+        <option value="teams" ${sel("teams")}>Microsoft Teams</option>
+        <option value="other" ${sel("other")}>Other Link</option>
+      </select>
+      <label class="days-label">Days</label>
+      <div class="days-picker edit-days-picker">${dayBtns}</div>
+      <div class="time-row">
+        <label class="time-row-label">Start
+          <input type="time" class="class-input edit-start-time" value="${escapeHtml(cls.classTime || "")}">
+        </label>
+        <label class="time-row-label">End
+          <input type="time" class="class-input edit-end-time" value="${escapeHtml(cls.endTime || "")}">
+        </label>
+      </div>
+      <div class="class-form-actions">
+        <button class="primary edit-save" data-id="${cls.id}">Save</button>
+        <button class="ghost edit-cancel" data-id="${cls.id}">Cancel</button>
+      </div>
+    </div>
+  `;
+}
 
 async function renderClasses() {
   const { classes } = await chrome.storage.local.get(["classes"]);
@@ -864,8 +938,14 @@ async function renderClasses() {
   if (els.classesSectionHeader) els.classesSectionHeader.classList.remove("hidden");
 
   const now = new Date();
-  classList.forEach(c => { c._nextDate = getNextClassDate(c, now); });
+  classList.forEach(c => {
+    c._ongoing = getOngoingClass(c, now);
+    c._nextDate = getNextClassDate(c, now);
+  });
   classList.sort((a, b) => {
+    if (a._ongoing && !b._ongoing) return -1;
+    if (!a._ongoing && b._ongoing) return 1;
+    if (a._ongoing && b._ongoing) return a._ongoing.end - b._ongoing.end;
     if (!a._nextDate && !b._nextDate) return 0;
     if (!a._nextDate) return 1;
     if (!b._nextDate) return -1;
@@ -879,18 +959,31 @@ async function renderClasses() {
     const card = document.createElement("div");
     card.className = "class-card";
 
+    if (editingClassId === cls.id) {
+      card.classList.add("editing");
+      card.dataset.id = cls.id;
+      card.innerHTML = buildInlineEditFormHtml(cls);
+      fragment.appendChild(card);
+      continue;
+    }
+
     const meetingType = cls.meetingType || "other";
     const meetingLabel = MEETING_LABELS[meetingType] || "Other Link";
     const hasLink = !!cls.meetingLink;
+    const ongoing = cls._ongoing;
     const startsIn = formatStartsIn(cls._nextDate, now);
-    const status = getClassStatus(cls._nextDate, now);
+    const status = ongoing
+      ? { label: "Ongoing", className: "in-progress" }
+      : getClassStatus(cls._nextDate, now);
 
     const daysDisplay = (cls.days && cls.days.length)
       ? cls.days.map(d => DAY_LABELS[d]).filter(Boolean).join(", ")
       : "";
     const scheduleFallbackParts = [daysDisplay, cls.classTime].filter(Boolean);
     const scheduleFallback = scheduleFallbackParts.length ? scheduleFallbackParts.join(" · ") : "No schedule set";
-    const timeText = startsIn || scheduleFallback;
+    const timeText = ongoing
+      ? (formatEndsIn(ongoing.end, now) || scheduleFallback)
+      : (startsIn || scheduleFallback);
 
     const statusBadgeHtml = status
       ? `<span class="class-status-badge ${status.className}">${status.label}</span>`
@@ -955,20 +1048,60 @@ async function renderClasses() {
 
   els.classList.querySelectorAll(".btn-edit").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      const { classes } = await chrome.storage.local.get(["classes"]);
-      const cls = (classes || []).find(c => c.id === id);
-      if (cls) {
-        showClassForm();
-        els.classInput.value = cls.name;
-        els.meetingLink.value = cls.meetingLink || "";
-        els.meetingType.value = cls.meetingType || "google-meet";
-        els.classTime.value = cls.classTime || "";
-        setSelectedDays(cls.days || []);
-        els.addClass.dataset.editId = id;
-        els.addClass.textContent = "Update Class";
-      }
+      editingClassId = btn.dataset.id;
+      await renderClasses();
     });
+  });
+
+  els.classList.querySelectorAll(".class-card.editing").forEach(card => {
+    card.querySelectorAll(".inline-day-btn").forEach(b => {
+      b.addEventListener("click", (e) => {
+        e.preventDefault();
+        b.classList.toggle("active");
+      });
+    });
+
+    const cancelBtn = card.querySelector(".edit-cancel");
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        editingClassId = null;
+        await renderClasses();
+      });
+    }
+
+    const saveBtn = card.querySelector(".edit-save");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const id = saveBtn.dataset.id;
+        const name = card.querySelector(".edit-name").value.trim();
+        const meetingLink = normalizeMeetingLink(card.querySelector(".edit-link").value);
+        const meetingType = card.querySelector(".edit-type").value;
+        const classTime = card.querySelector(".edit-start-time").value;
+        const endTime = card.querySelector(".edit-end-time").value || null;
+        const days = Array.from(card.querySelectorAll(".inline-day-btn.active")).map(b => b.dataset.day);
+
+        if (!name || days.length === 0 || !meetingLink) {
+          setStatus("Please enter a subject name, a meeting link, and select at least one day.", "error");
+          setTimeout(() => setStatus(""), 2800);
+          return;
+        }
+
+        const { classes } = await chrome.storage.local.get(["classes"]);
+        const list = (classes || []).slice();
+        const idx = list.findIndex(c => c.id === id);
+        if (idx !== -1) {
+          list[idx] = { ...list[idx], name, meetingLink, meetingType, classTime, endTime, days };
+          await chrome.storage.local.set({ classes: list });
+          chrome.runtime.sendMessage({ type: "classes-updated" });
+          setStatus("Class updated!", "success");
+          setTimeout(() => setStatus(""), 2000);
+        }
+        editingClassId = null;
+        await renderClasses();
+      });
+    }
   });
 
   els.classList.querySelectorAll(".btn-remind").forEach(btn => {

@@ -122,7 +122,14 @@
         <button type="button" class="day-btn" data-day="fri">Fri</button>
         <button type="button" class="day-btn" data-day="sat">Sat</button>
       </div>
-      <input type="time" id="classTime" class="class-input">
+      <div class="time-row">
+        <label class="time-row-label">Start
+          <input type="time" id="classTime" class="class-input">
+        </label>
+        <label class="time-row-label">End
+          <input type="time" id="classEndTime" class="class-input">
+        </label>
+      </div>
       <div class="class-form-actions">
         <button id="addClass" class="primary">Save Class</button>
         <button id="cancelClassForm" class="ghost">Cancel</button>
